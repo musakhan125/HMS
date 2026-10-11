@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatDate, formatCurrency, getCurrencySymbol, generateReceiptNo, exportToCSV, getMonthStart } from '@/lib/utils';
@@ -6,15 +6,15 @@ import type { Payment, Tenant, PaymentType, PaymentMethod } from '@/types/databa
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Download, Printer, CreditCard, Calendar, FileText, CheckCircle2, Loader2, Building2 } from 'lucide-react';
+import { Plus, Search, Download, Printer, CreditCard, Loader2, Building2, Pencil, Trash2 } from 'lucide-react';
 
 export default function Payments() {
-  const { hostel, user, isOwner } = useAuth();
+  const { hostel, user } = useAuth();
   const currencySymbol = hostel?.currency_symbol || getCurrencySymbol();
 
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -26,8 +26,9 @@ export default function Payments() {
   const [tenantFilter, setTenantFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
 
-  // New Payment Modal
+  // Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -41,6 +42,11 @@ export default function Payments() {
     notes: '',
   });
 
+  // Delete confirmation
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // Receipt Modal
   const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
 
@@ -49,7 +55,6 @@ export default function Payments() {
     setLoading(true);
 
     try {
-      // 1. Fetch Tenants
       const { data: tenantsData } = await supabase
         .from('tenants')
         .select('*, room:rooms(*)')
@@ -57,7 +62,6 @@ export default function Payments() {
         .order('full_name');
       setTenants((tenantsData as Tenant[]) || []);
 
-      // 2. Fetch Payments
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*, tenant:tenants(*, room:rooms(*))')
@@ -78,6 +82,7 @@ export default function Payments() {
 
   const handleOpenAdd = () => {
     const firstTenant = tenants.find(t => t.status === 'active') || tenants[0];
+    setEditingPayment(null);
     setFormData({
       tenant_id: firstTenant ? firstTenant.id : '',
       payment_date: new Date().toISOString().split('T')[0],
@@ -91,12 +96,33 @@ export default function Payments() {
     setIsModalOpen(true);
   };
 
+  const handleOpenEdit = (p: Payment) => {
+    setEditingPayment(p);
+    setFormData({
+      tenant_id: p.tenant_id,
+      payment_date: p.payment_date,
+      month_for: p.month_for,
+      type: p.type,
+      amount: p.amount,
+      method: p.method,
+      notes: p.notes || '',
+    });
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = (open: boolean) => {
+    setIsModalOpen(open);
+    if (!open) setEditingPayment(null);
+  };
+
   const handleTenantChange = (tenantId: string) => {
     const selTenant = tenants.find(t => t.id === tenantId);
     setFormData({
       ...formData,
       tenant_id: tenantId,
-      amount: selTenant && formData.type === 'rent' ? selTenant.monthly_rent : formData.amount,
+      // Only auto-fill the rent amount when adding a new payment
+      amount: !editingPayment && selTenant && formData.type === 'rent' ? selTenant.monthly_rent : formData.amount,
     });
   };
 
@@ -107,9 +133,40 @@ export default function Payments() {
     setFormError(null);
 
     try {
+      const monthSource = formData.month_for.length === 7 ? `${formData.month_for}-01` : formData.month_for;
+      const monthFor = getMonthStart(new Date(`${monthSource}T00:00:00`));
+
+      if (editingPayment) {
+        // ---------- UPDATE ----------
+        const { data: updated, error } = await supabase
+          .from('payments')
+          .update({
+            tenant_id: formData.tenant_id,
+            payment_date: formData.payment_date,
+            month_for: monthFor,
+            type: formData.type,
+            amount: Number(formData.amount),
+            method: formData.method,
+            notes: formData.notes,
+          })
+          .eq('id', editingPayment.id)
+          .eq('hostel_id', hostel.id)
+          .select('*, tenant:tenants(*, room:rooms(*))');
+
+        if (error) throw error;
+        if (!updated || updated.length === 0) {
+          throw new Error('Update was not saved. You may not have permission to edit payments.');
+        }
+
+        setIsModalOpen(false);
+        setEditingPayment(null);
+        fetchData();
+        return;
+      }
+
+      // ---------- INSERT ----------
       const receiptNo = generateReceiptNo();
 
-      // Check receipt duplicate uniqueness (handled by backend UNIQUE constraint, but checked locally too)
       const { data: dupCheck } = await supabase
         .from('payments')
         .select('id')
@@ -121,13 +178,12 @@ export default function Payments() {
         throw new Error('Receipt number collision. Please try submitting again.');
       }
 
-      const monthSource = formData.month_for.length === 7 ? `${formData.month_for}-01` : formData.month_for;
       const payload = {
         hostel_id: hostel.id,
         tenant_id: formData.tenant_id,
         receipt_no: receiptNo,
         payment_date: formData.payment_date,
-        month_for: getMonthStart(new Date(`${monthSource}T00:00:00`)),
+        month_for: monthFor,
         type: formData.type,
         amount: Number(formData.amount),
         method: formData.method,
@@ -146,14 +202,41 @@ export default function Payments() {
       setIsModalOpen(false);
       fetchData();
 
-      // Show print receipt preview for new payment automatically
       if (newPayment) {
         setSelectedReceipt(newPayment as Payment);
       }
     } catch (err: any) {
-      setFormError(err.message || 'Error recording payment');
+      setFormError(err.message || 'Error saving payment');
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!paymentToDelete || !hostel?.id) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .delete()
+        .eq('id', paymentToDelete.id)
+        .eq('hostel_id', hostel.id)
+        .select('id');
+
+      if (error) throw error;
+      // Supabase returns no error (but no rows) when RLS blocks a delete
+      if (!data || data.length === 0) {
+        throw new Error('Payment was not deleted. You may not have permission to delete payments.');
+      }
+
+      setPayments(prev => prev.filter(p => p.id !== paymentToDelete.id));
+      setPaymentToDelete(null);
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error deleting payment');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -173,7 +256,6 @@ export default function Payments() {
     exportToCSV(csvData, `Hostel_Payments_${new Date().toISOString().split('T')[0]}`);
   };
 
-  // Filtered payments list
   const filteredPayments = payments.filter(p => {
     const tenantName = (p.tenant as any)?.full_name || '';
     const receipt = p.receipt_no || '';
@@ -274,7 +356,7 @@ export default function Payments() {
                     <th className="px-6 py-4">Type</th>
                     <th className="px-6 py-4 text-right">Amount</th>
                     <th className="px-6 py-4">Method</th>
-                    <th className="px-6 py-4 text-right">Receipt</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -296,9 +378,20 @@ export default function Payments() {
                           {formatCurrency(p.amount, currencySymbol)}
                         </td>
                         <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
                           <Button variant="ghost" size="sm" onClick={() => setSelectedReceipt(p)} className="gap-1">
-                            <Printer className="w-3.5 h-3.5" /> View Receipt
+                            <Printer className="w-3.5 h-3.5" /> View
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)} className="gap-1">
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setDeleteError(null); setPaymentToDelete(p); }}
+                            className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
                           </Button>
                         </td>
                       </tr>
@@ -311,12 +404,16 @@ export default function Payments() {
         </CardContent>
       </Card>
 
-      {/* Record Payment Dialog */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      {/* Add / Edit Payment Dialog */}
+      <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record New Payment</DialogTitle>
-            <DialogDescription>Issue an official payment receipt for rent, deposit, or utility fees.</DialogDescription>
+            <DialogTitle>{editingPayment ? 'Edit Payment' : 'Record New Payment'}</DialogTitle>
+            <DialogDescription>
+              {editingPayment
+                ? `Update the details for receipt ${editingPayment.receipt_no}.`
+                : 'Issue an official payment receipt for rent, deposit, or utility fees.'}
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSavePayment} className="space-y-4">
@@ -423,13 +520,43 @@ export default function Payments() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => handleCloseModal(false)}>Cancel</Button>
               <Button type="submit" disabled={formSubmitting}>
                 {formSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Generate Official Receipt
+                {editingPayment ? 'Save Changes' : 'Generate Official Receipt'}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!paymentToDelete} onOpenChange={(open) => !open && setPaymentToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Payment?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete receipt{' '}
+              <span className="font-mono font-semibold">{paymentToDelete?.receipt_no}</span>
+              {' '}for {(paymentToDelete?.tenant as any)?.full_name || 'this tenant'}
+              {paymentToDelete ? ` (${formatCurrency(paymentToDelete.amount, currencySymbol)})` : ''}.
+              This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-md">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentToDelete(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting} className="gap-2">
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -438,7 +565,6 @@ export default function Payments() {
         <Dialog open={!!selectedReceipt} onOpenChange={(open) => !open && setSelectedReceipt(null)}>
           <DialogContent className="max-w-xl">
             <div id="printable-receipt" className="p-6 bg-white text-slate-900 rounded-lg space-y-6">
-              {/* Header */}
               <div className="border-b pb-4 flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2">
@@ -457,7 +583,6 @@ export default function Payments() {
                 </div>
               </div>
 
-              {/* Tenant & Room details */}
               <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg">
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase">Received From:</p>
@@ -473,7 +598,6 @@ export default function Payments() {
                 </div>
               </div>
 
-              {/* Receipt Summary Table */}
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b text-xs uppercase text-slate-500 bg-slate-100">
@@ -503,7 +627,6 @@ export default function Payments() {
                 </div>
               )}
 
-              {/* Signature Footer */}
               <div className="pt-8 border-t flex justify-between items-end text-xs text-slate-500">
                 <div>
                   <p>Computer Generated Receipt</p>
