@@ -328,11 +328,9 @@ export default function Expenses() {
                           <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(exp)}>
                             <Edit className="w-4 h-4 text-blue-600" />
                           </Button>
-                          {isOwner && (
                           <Button variant="ghost" size="icon" onClick={() => setDeletingExpenseId(exp.id)} title="Delete">
-                          <Trash2 className="w-4 h-4 text-rose-600" />
-                        </Button>
-                          )}
+  <Trash2 className="w-4 h-4 text-rose-600" />
+</Button>
                         </div>
                       </td>
                     </tr>
