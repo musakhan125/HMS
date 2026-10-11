@@ -380,10 +380,10 @@ export default function Payments() {
                         <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
                         <td className="px-6 py-4 text-right whitespace-nowrap">
                           <Button variant="ghost" size="sm" onClick={() => setSelectedReceipt(p)} className="gap-1">
-                            <Printer className="w-3.5 h-3.5" /> View
+                            <Printer className="w-3.5 h-3.5" />
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)} className="gap-1">
-                            <Pencil className="w-3.5 h-3.5" /> Edit
+                            <Pencil className="w-3.5 h-3.5" /> 
                           </Button>
                           <Button
                             variant="ghost"
@@ -391,7 +391,7 @@ export default function Payments() {
                             onClick={() => { setDeleteError(null); setPaymentToDelete(p); }}
                             className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
                           >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </td>
                       </tr>
