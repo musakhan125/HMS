@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatDate, formatCurrency, getCurrencySymbol } from '@/lib/utils';
+import { persistRoom } from '@/lib/rooms';
 import type { Tenant, Room } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ export default function Tenants() {
     guardian_phone: '',
     home_address: '',
     room_id: '',
+    room_no: '',
     join_date: new Date().toISOString().split('T')[0],
     monthly_rent: 0,
     security_deposit: 0,
@@ -104,6 +106,7 @@ export default function Tenants() {
       guardian_phone: tenant.guardian_phone || '',
       home_address: tenant.home_address || '',
       room_id: tenant.room_id || '',
+      room_no: tenant.room?.room_no || '',
       join_date: tenant.join_date,
       monthly_rent: tenant.monthly_rent,
       security_deposit: tenant.security_deposit,
@@ -115,7 +118,6 @@ export default function Tenants() {
 
   const handleOpenAdd = () => {
     setEditingTenant(null);
-    const defaultRoom = rooms.length > 0 ? rooms[0] : null;
     setFormData({
       full_name: '',
       tenant_type: 'student',
@@ -125,10 +127,11 @@ export default function Tenants() {
       guardian_name: '',
       guardian_phone: '',
       home_address: '',
-      room_id: defaultRoom ? defaultRoom.id : '',
+      room_id: '',
+      room_no: '',
       join_date: new Date().toISOString().split('T')[0],
-      monthly_rent: defaultRoom ? defaultRoom.rent_per_bed : 0,
-      security_deposit: defaultRoom ? defaultRoom.rent_per_bed : 0,
+      monthly_rent: 0,
+      security_deposit: 0,
       notes: '',
     });
     setPhotoFile(null);
@@ -155,19 +158,42 @@ export default function Tenants() {
     setFormError(null);
 
     try {
-      const selectedRoomId = formData.room_id === 'none' ? '' : formData.room_id;
+      const typedRoomNo = formData.room_no.trim();
+      let selectedRoomId = formData.room_id === 'none' ? '' : formData.room_id;
+      let targetRoom = selectedRoomId ? rooms.find(r => r.id === selectedRoomId) : undefined;
+
+      if (typedRoomNo) {
+        const matched = rooms.find(r => r.room_no.toLowerCase() === typedRoomNo.toLowerCase());
+        if (matched) {
+          selectedRoomId = matched.id;
+          targetRoom = matched;
+        } else {
+          const { data: createdRoom, error: roomErr } = await persistRoom({
+            hostel_id: hostel.id,
+            room_no: typedRoomNo,
+            floor: 0,
+            room_type: 'single',
+            beds: 1,
+            rent_per_bed: Number(formData.monthly_rent) || 0,
+          });
+          if (roomErr) throw roomErr;
+          if (!createdRoom) throw new Error('Could not create room. Please add it from the Rooms page first.');
+          selectedRoomId = createdRoom.id;
+          targetRoom = createdRoom as Room;
+        }
+      } else {
+        selectedRoomId = '';
+        targetRoom = undefined;
+      }
 
       // Validation: Room capacity check when assigning to a room
-      if (selectedRoomId) {
-        const targetRoom = rooms.find(r => r.id === selectedRoomId);
-        if (targetRoom) {
-          const activeInRoom = tenants.filter(
-            t => t.room_id === selectedRoomId && t.status === 'active' && t.id !== editingTenant?.id
-          ).length;
+      if (selectedRoomId && targetRoom) {
+        const activeInRoom = tenants.filter(
+          t => t.room_id === selectedRoomId && t.status === 'active' && t.id !== editingTenant?.id
+        ).length;
 
-          if (activeInRoom >= targetRoom.beds) {
-            throw new Error(`Room ${targetRoom.room_no} has reached maximum capacity of ${targetRoom.beds} beds.`);
-          }
+        if (activeInRoom >= (targetRoom.beds || 1)) {
+          throw new Error(`Room ${targetRoom.room_no} has reached maximum capacity of ${targetRoom.beds} beds.`);
         }
       }
 
@@ -486,31 +512,49 @@ export default function Tenants() {
                 />
               </div>
 
-              {/* Room Selection Dropdown (Fixed Radix Select value mapping) */}
               <div className="space-y-2">
-                <Label htmlFor="room_id">Assigned Room</Label>
-                <Select
-                  value={formData.room_id || "none"}
-                  onValueChange={(val) => {
-                    const roomId = val === "none" ? "" : val;
+                <Label htmlFor="room_no">Assigned Room</Label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={formData.room_id || ''}
+                  onChange={(e) => {
+                    const roomId = e.target.value;
                     const selRoom = rooms.find(r => r.id === roomId);
                     setFormData({
                       ...formData,
                       room_id: roomId,
-                      monthly_rent: selRoom ? selRoom.rent_per_bed : formData.monthly_rent,
+                      room_no: selRoom ? selRoom.room_no : '',
+                      monthly_rent: selRoom && !editingTenant ? selRoom.rent_per_bed : formData.monthly_rent,
+                      security_deposit: selRoom && !editingTenant && formData.security_deposit === 0 ? selRoom.rent_per_bed : formData.security_deposit,
                     });
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select room" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- Unassigned / Select Later --</SelectItem>
-                    {rooms.map(r => (
-                      <SelectItem key={r.id} value={r.id}>
-                        Room {r.room_no} ({r.room_type} - {formatCurrency(r.rent_per_bed, currencySymbol)})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value="">Unassigned / type a new room below</option>
+                  {rooms.map(r => (
+                    <option key={r.id} value={r.id}>
+                      Room {r.room_no} ({r.room_type} · {formatCurrency(r.rent_per_bed, currencySymbol)})
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  id="room_no"
+                  value={formData.room_no}
+                  onChange={(e) => {
+                    const roomNo = e.target.value;
+                    const selRoom = rooms.find(r => r.room_no.toLowerCase() === roomNo.trim().toLowerCase());
+                    setFormData({
+                      ...formData,
+                      room_no: roomNo,
+                      room_id: selRoom ? selRoom.id : '',
+                      monthly_rent: selRoom && !editingTenant ? selRoom.rent_per_bed : formData.monthly_rent,
+                      security_deposit: selRoom && !editingTenant && formData.security_deposit === 0 ? selRoom.rent_per_bed : formData.security_deposit,
+                    });
+                  }}
+                  placeholder="Type room number (e.g. 12)"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Pick an existing room or type a new number. Unknown room numbers are created automatically.
+                </p>
               </div>
 
               <div className="space-y-2">

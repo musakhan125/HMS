@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatDate, formatCurrency, getCurrencySymbol, exportToCSV, snakeToTitle } from '@/lib/utils';
+import { formatFloorLabel } from '@/lib/rooms';
 import type { Tenant, Room, Payment, Expense } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -316,7 +317,7 @@ export default function Reports() {
                       return (
                         <tr key={r.id} className="hover:bg-muted/40">
                           <td className="px-6 py-3.5 font-bold">Room {r.room_no}</td>
-                          <td className="px-6 py-3.5 text-muted-foreground">{r.floor}</td>
+                          <td className="px-6 py-3.5 text-muted-foreground">{formatFloorLabel(r.floor)}</td>
                           <td className="px-6 py-3.5 capitalize">{r.room_type}</td>
                           <td className="px-6 py-3.5 text-center font-medium">{r.beds}</td>
                           <td className="px-6 py-3.5 text-center font-medium text-emerald-600">{occCount}</td>

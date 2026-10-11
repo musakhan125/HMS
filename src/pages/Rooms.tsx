@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, getCurrencySymbol } from '@/lib/utils';
+import { formatFloorLabel, persistRoom } from '@/lib/rooms';
 import type { Room, Tenant, RoomType } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,7 +107,7 @@ export default function Rooms() {
     setEditingRoom(room);
     setFormData({
       room_no: room.room_no,
-      floor: room.floor || 'Ground',
+      floor: room.floor === 0 || room.floor === '0' ? 'Ground' : String(room.floor || 'Ground'),
       room_type: room.room_type,
       beds: room.beds,
       rent_per_bed: room.rent_per_bed,
@@ -131,23 +132,18 @@ export default function Rooms() {
         throw new Error(`Room number "${formData.room_no}" already exists in this hostel.`);
       }
 
-      const payload = {
-        hostel_id: hostel.id,
-        room_no: formData.room_no.trim(),
-        floor: formData.floor,
-        room_type: formData.room_type,
-        beds: Number(formData.beds),
-        rent_per_bed: Number(formData.rent_per_bed),
-        notes: formData.notes,
-      };
-
-      if (editingRoom) {
-        const { error } = await supabase.from('rooms').update(payload).eq('id', editingRoom.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('rooms').insert(payload);
-        if (error) throw error;
-      }
+      const { error } = await persistRoom(
+        {
+          hostel_id: hostel.id,
+          room_no: formData.room_no.trim(),
+          floor: formData.floor,
+          room_type: formData.room_type,
+          beds: Number(formData.beds),
+          rent_per_bed: Number(formData.rent_per_bed),
+        },
+        editingRoom?.id
+      );
+      if (error) throw error;
 
       setIsModalOpen(false);
       fetchRoomsData();
@@ -218,7 +214,7 @@ export default function Rooms() {
                     <div>
                       <CardTitle className="text-xl flex items-center gap-2">
                         <span>Room {room.room_no}</span>
-                        <span className="text-xs font-normal text-muted-foreground">({room.floor} Floor)</span>
+                        <span className="text-xs font-normal text-muted-foreground">({formatFloorLabel(room.floor)} Floor)</span>
                       </CardTitle>
                       <CardDescription className="capitalize text-xs mt-0.5">{room.room_type} Room</CardDescription>
                     </div>
@@ -326,12 +322,20 @@ export default function Rooms() {
 
               <div className="space-y-2">
                 <Label htmlFor="floor">Floor Level</Label>
-                <Input
+                <select
                   id="floor"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                  placeholder="Ground / 1st / 2nd"
-                />
+                >
+                  <option value="Ground">Ground (0)</option>
+                  <option value="1">1st Floor</option>
+                  <option value="2">2nd Floor</option>
+                  <option value="3">3rd Floor</option>
+                  <option value="4">4th Floor</option>
+                  <option value="5">5th Floor</option>
+                  <option value="6">6th Floor</option>
+                </select>
               </div>
 
               <div className="space-y-2">

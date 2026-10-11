@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDate, formatCurrency, getCurrencySymbol, generateReceiptNo, exportToCSV } from '@/lib/utils';
+import { formatDate, formatCurrency, getCurrencySymbol, generateReceiptNo, exportToCSV, getMonthStart } from '@/lib/utils';
 import type { Payment, Tenant, PaymentType, PaymentMethod } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ export default function Payments() {
   const [formData, setFormData] = useState({
     tenant_id: '',
     payment_date: new Date().toISOString().split('T')[0],
-    month_for: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    month_for: getMonthStart(new Date()),
     type: 'rent' as PaymentType,
     amount: 0,
     method: 'cash' as PaymentMethod,
@@ -81,7 +81,7 @@ export default function Payments() {
     setFormData({
       tenant_id: firstTenant ? firstTenant.id : '',
       payment_date: new Date().toISOString().split('T')[0],
-      month_for: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+      month_for: getMonthStart(new Date()),
       type: 'rent',
       amount: firstTenant ? firstTenant.monthly_rent : 0,
       method: 'cash',
@@ -121,12 +121,13 @@ export default function Payments() {
         throw new Error('Receipt number collision. Please try submitting again.');
       }
 
+      const monthSource = formData.month_for.length === 7 ? `${formData.month_for}-01` : formData.month_for;
       const payload = {
         hostel_id: hostel.id,
         tenant_id: formData.tenant_id,
         receipt_no: receiptNo,
         payment_date: formData.payment_date,
-        month_for: formData.month_for,
+        month_for: getMonthStart(new Date(`${monthSource}T00:00:00`)),
         type: formData.type,
         amount: Number(formData.amount),
         method: formData.method,
@@ -386,9 +387,9 @@ export default function Payments() {
                 <Label htmlFor="month_for">Month For *</Label>
                 <Input
                   id="month_for"
-                  type="date"
-                  value={formData.month_for}
-                  onChange={(e) => setFormData({ ...formData, month_for: e.target.value })}
+                  type="month"
+                  value={formData.month_for.slice(0, 7)}
+                  onChange={(e) => setFormData({ ...formData, month_for: e.target.value ? `${e.target.value}-01` : '' })}
                   required
                 />
               </div>

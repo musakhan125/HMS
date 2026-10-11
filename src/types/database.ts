@@ -29,7 +29,7 @@ export interface Room {
   id: string;
   hostel_id: string;
   room_no: string;
-  floor: string;
+  floor: string | number;
   room_type: RoomType;
   beds: number;
   rent_per_bed: number;
@@ -165,7 +165,7 @@ export interface HostelFormData {
 
 export interface RoomFormData {
   room_no: string;
-  floor: string;
+  floor: string | number;
   room_type: RoomType;
   beds: number;
   rent_per_bed: number;
