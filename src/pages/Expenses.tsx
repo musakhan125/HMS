@@ -160,14 +160,23 @@ export default function Expenses() {
   };
 
   const handleDeleteExpense = async () => {
-    if (!deletingExpenseId) return;
+    if (!deletingExpenseId || !hostel?.id) return;
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', deletingExpenseId);
+      const { data, error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', deletingExpenseId)
+        .eq('hostel_id', hostel.id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        alert('Expense was not deleted. You may not have permission to delete expenses.');
+        return;
+      }
       setDeletingExpenseId(null);
       fetchExpenses();
-    } catch (err) {
-      console.error('Error deleting expense:', err);
+    } catch (err: any) {
+      alert(err.message || 'Error deleting expense');
     }
   };
 
@@ -320,9 +329,9 @@ export default function Expenses() {
                             <Edit className="w-4 h-4 text-blue-600" />
                           </Button>
                           {isOwner && (
-                            <Button variant="ghost" size="icon" onClick={() => setDeletingExpenseId(exp.id)}>
-                              <Trash2 className="w-4 h-4 text-rose-600" />
-                            </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeletingExpenseId(exp.id)} title="Delete">
+                          <Trash2 className="w-4 h-4 text-rose-600" />
+                        </Button>
                           )}
                         </div>
                       </td>
