@@ -19,6 +19,7 @@ interface TenantRentStatus {
   paid_amount: number;
   balance: number;
   status: 'paid' | 'partial' | 'unpaid';
+  arrears: number;
 }
 
 export default function RentTracker() {
@@ -41,24 +42,32 @@ export default function RentTracker() {
   const [payNotes, setPayNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Success Payment Receipt Modal
+  const [successPayment, setSuccessPayment] = useState<{
+    tenantName: string;
+    phone: string;
+    amount: number;
+    receiptNo: string;
+    monthLabel: string;
+  } | null>(null);
+
   const fetchRentTrackerData = useCallback(async () => {
     if (!hostel?.id) return;
     setLoading(true);
 
     try {
       const monthStart = `${selectedMonth}-01`;
-      // Calculate month end date
+      // Calculate month end date (first day of next month)
       const year = parseInt(selectedMonth.split('-')[0]);
       const month = parseInt(selectedMonth.split('-')[1]);
       const nextMonthFirst = new Date(year, month, 1);
       const monthEnd = nextMonthFirst.toISOString().split('T')[0];
 
-      // 1. Fetch active tenants
+      // 1. Fetch tenants for this hostel
       const { data: tenantsData } = await supabase
         .from('tenants')
         .select('*, room:rooms(*)')
-        .eq('hostel_id', hostel.id)
-        .eq('status', 'active');
+        .eq('hostel_id', hostel.id);
 
       if (!tenantsData) {
         setRentStatuses([]);
@@ -66,20 +75,51 @@ export default function RentTracker() {
         return;
       }
 
-      // 2. Fetch payments for rent for this month
-      const { data: paymentsData } = await supabase
+      // Filter: only include tenants who joined on or before this month's end,
+      // and who didn't leave before this month started
+      const validTenants = tenantsData.filter(t => {
+        const joinDate = t.join_date ? t.join_date.substring(0, 10) : '1970-01-01';
+        if (joinDate >= monthEnd) return false; // Joined in a future month
+
+        if (t.status === 'left' && t.leave_date) {
+          const leaveDate = t.leave_date.substring(0, 10);
+          if (leaveDate < monthStart) return false; // Left before this month began
+        }
+
+        return true;
+      });
+
+      // 2. Fetch all rent payments up to monthEnd
+      const { data: allRentPayments } = await supabase
         .from('payments')
         .select('*')
         .eq('hostel_id', hostel.id)
         .eq('type', 'rent')
-        .gte('month_for', monthStart)
         .lt('month_for', monthEnd);
 
-      const statusList: TenantRentStatus[] = tenantsData.map(t => {
-        const tenantPayments = (paymentsData || []).filter(p => p.tenant_id === t.id);
-        const paid = tenantPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const statusList: TenantRentStatus[] = validTenants.map(t => {
+        const currentMonthPayments = (allRentPayments || []).filter(
+          p => p.tenant_id === t.id && p.month_for >= monthStart && p.month_for < monthEnd
+        );
+        const paid = currentMonthPayments.reduce((acc, p) => acc + Number(p.amount), 0);
         const expected = Number(t.monthly_rent);
         const bal = expected - paid;
+
+        // Arrears from previous months
+        let arrears = 0;
+        const joinStr = t.join_date ? t.join_date.substring(0, 7) : selectedMonth;
+        if (joinStr < selectedMonth) {
+          const [jY, jM] = joinStr.split('-').map(Number);
+          const [sY, sM] = selectedMonth.split('-').map(Number);
+          const monthsPrior = (sY - jY) * 12 + (sM - jM);
+          if (monthsPrior > 0) {
+            const priorExpected = monthsPrior * expected;
+            const priorPaid = (allRentPayments || [])
+              .filter(p => p.tenant_id === t.id && p.month_for < monthStart)
+              .reduce((acc, p) => acc + Number(p.amount), 0);
+            arrears = Math.max(0, priorExpected - priorPaid);
+          }
+        }
 
         let st: 'paid' | 'partial' | 'unpaid' = 'unpaid';
         if (paid >= expected) st = 'paid';
@@ -91,6 +131,7 @@ export default function RentTracker() {
           paid_amount: paid,
           balance: Math.max(0, bal),
           status: st,
+          arrears,
         };
       });
 
@@ -139,6 +180,13 @@ export default function RentTracker() {
       const { error } = await supabase.from('payments').insert(payload);
       if (error) throw error;
 
+      setSuccessPayment({
+        tenantName: quickTenant.tenant.full_name,
+        phone: quickTenant.tenant.phone,
+        amount: Number(payAmount),
+        receiptNo,
+        monthLabel: new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' }),
+      });
       setQuickTenant(null);
       fetchRentTrackerData();
     } catch (err) {
@@ -161,6 +209,7 @@ export default function RentTracker() {
   const totalExpected = rentStatuses.reduce((a, s) => a + s.expected_rent, 0);
   const totalPaid = rentStatuses.reduce((a, s) => a + s.paid_amount, 0);
   const totalUnpaid = rentStatuses.reduce((a, s) => a + s.balance, 0);
+  const totalArrears = rentStatuses.reduce((a, s) => a + (s.arrears || 0), 0);
 
   const filteredStatuses = rentStatuses.filter(s => {
     const matchesSearch =
@@ -197,7 +246,7 @@ export default function RentTracker() {
       </div>
 
       {/* Monthly Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <p className="text-xs font-semibold text-muted-foreground uppercase">Expected Rent</p>
@@ -212,8 +261,14 @@ export default function RentTracker() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-xs font-semibold text-rose-600 uppercase">Outstanding Rent</p>
+            <p className="text-xs font-semibold text-rose-600 uppercase">This Month Pending</p>
             <p className="text-2xl font-bold text-rose-600 mt-1">{formatCurrency(totalUnpaid, currencySymbol)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs font-semibold text-amber-600 uppercase">Prior Months Arrears</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalArrears, currencySymbol)}</p>
           </CardContent>
         </Card>
       </div>
@@ -267,7 +322,10 @@ export default function RentTracker() {
                   const rentDetail = item.paid_amount > 0
                     ? `Remaining Balance Due: ${formatCurrency(item.balance, currencySymbol)}`
                     : `Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}`;
-                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}. Please clear your dues at your earliest convenience. Thank you!`;
+                  const arrearsText = item.arrears > 0
+                    ? ` (Previous Arrears: ${formatCurrency(item.arrears, currencySymbol)})`
+                    : '';
+                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}${arrearsText}. Please clear your dues at your earliest convenience. Thank you!`;
                   const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                   return (
@@ -301,6 +359,13 @@ export default function RentTracker() {
                           <span className="font-bold text-rose-600">{formatCurrency(item.balance, currencySymbol)}</span>
                         </div>
                       </div>
+
+                      {item.arrears > 0 && (
+                        <div className="text-[11px] text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md flex items-center justify-between">
+                          <span className="font-medium">Prior Months Arrears:</span>
+                          <span className="font-bold text-amber-700">+{formatCurrency(item.arrears, currencySymbol)}</span>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-end gap-2 pt-1 border-t">
                         {item.status !== 'paid' ? (
@@ -346,7 +411,10 @@ export default function RentTracker() {
                       const rentDetail = item.paid_amount > 0
                         ? `Remaining Balance Due: ${formatCurrency(item.balance, currencySymbol)}`
                         : `Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}`;
-                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}. Please clear your dues at your earliest convenience. Thank you!`;
+                      const arrearsText = item.arrears > 0
+                        ? ` (Previous Arrears: ${formatCurrency(item.arrears, currencySymbol)})`
+                        : '';
+                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}${arrearsText}. Please clear your dues at your earliest convenience. Thank you!`;
                       const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                       return (
@@ -366,8 +434,15 @@ export default function RentTracker() {
                           <td className="px-6 py-4 text-right font-medium text-emerald-600">
                             {formatCurrency(item.paid_amount, currencySymbol)}
                           </td>
-                          <td className="px-6 py-4 text-right font-bold text-rose-600">
-                            {formatCurrency(item.balance, currencySymbol)}
+                          <td className="px-6 py-4 text-right">
+                            <span className="font-bold text-rose-600">
+                              {formatCurrency(item.balance, currencySymbol)}
+                            </span>
+                            {item.arrears > 0 && (
+                              <span className="block text-[11px] font-semibold text-amber-600">
+                                +{formatCurrency(item.arrears, currencySymbol)} arrears
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-center">
                             {item.status === 'paid' && <Badge variant="success">PAID</Badge>}
@@ -422,7 +497,12 @@ export default function RentTracker() {
               <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg space-y-1 text-xs">
                 <p>Expected Rent: <strong>{formatCurrency(quickTenant.expected_rent, currencySymbol)}</strong></p>
                 <p>Already Paid: <strong>{formatCurrency(quickTenant.paid_amount, currencySymbol)}</strong></p>
-                <p>Current Balance: <strong className="text-rose-600">{formatCurrency(quickTenant.balance, currencySymbol)}</strong></p>
+                <p>Current Month Balance: <strong className="text-rose-600">{formatCurrency(quickTenant.balance, currencySymbol)}</strong></p>
+                {quickTenant.arrears > 0 && (
+                  <p className="text-amber-700 font-semibold pt-1 border-t">
+                    ⚠️ Prior Months Arrears: {formatCurrency(quickTenant.arrears, currencySymbol)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -468,6 +548,50 @@ export default function RentTracker() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Success Payment WhatsApp Receipt Dialog */}
+      {successPayment && (
+        <Dialog open={!!successPayment} onOpenChange={(open) => !open && setSuccessPayment(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
+                <CheckCircle className="w-7 h-7" />
+              </div>
+              <DialogTitle className="text-xl">Payment Recorded!</DialogTitle>
+              <DialogDescription>
+                Receipt #{successPayment.receiptNo} of {formatCurrency(successPayment.amount, currencySymbol)} has been recorded for {successPayment.tenantName}.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="bg-slate-50 border rounded-lg p-3 text-xs space-y-1.5 text-slate-700">
+              <p><strong>Hostelite:</strong> {successPayment.tenantName}</p>
+              <p><strong>Amount:</strong> {formatCurrency(successPayment.amount, currencySymbol)}</p>
+              <p><strong>Month:</strong> {successPayment.monthLabel} Rent</p>
+              <p><strong>Receipt No:</strong> {successPayment.receiptNo}</p>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <a
+                href={getWhatsAppLink(
+                  successPayment.phone,
+                  `Payment Received! Dear ${successPayment.tenantName}, thank you for your payment. Received: ${formatCurrency(successPayment.amount, currencySymbol)} for ${successPayment.monthLabel} rent. Receipt No: ${successPayment.receiptNo}. Date: ${formatDate(new Date())}. - Arslan (Saibaan Hostel Wardan)`
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:flex-1"
+                onClick={() => setSuccessPayment(null)}
+              >
+                <Button className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <MessageSquare className="w-4 h-4" /> Send WhatsApp Receipt
+                </Button>
+              </a>
+              <Button variant="outline" onClick={() => setSuccessPayment(null)}>
+                Done
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

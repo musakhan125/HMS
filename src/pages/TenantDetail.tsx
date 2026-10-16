@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft, Phone, User, Calendar, MapPin, Building, ShieldCheck,
-  CreditCard, FileText, MessageSquare, Download, CheckCircle, AlertCircle, ExternalLink, Loader2
+  CreditCard, FileText, MessageSquare, Download, CheckCircle, AlertCircle, ExternalLink, Loader2, Users
 } from 'lucide-react';
 
 export default function TenantDetail() {
@@ -87,6 +87,14 @@ export default function TenantDetail() {
   const whatsAppMsg = `Hello ${tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent. Monthly Rent: ${formatCurrency(tenant.monthly_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
   const whatsAppLink = getWhatsAppLink(tenant.phone, whatsAppMsg);
 
+  // Guardian WhatsApp message
+  const guardianWhatsAppMsg = tenant.guardian_phone
+    ? `Assalam o Alaikum, this is Arslan from Saibaan Hostel Wardan. I am writing regarding ${tenant.full_name} who is currently staying at our hostel (Room ${tenant.room?.room_no || 'N/A'}). Monthly Rent: ${formatCurrency(tenant.monthly_rent, currencySymbol)}. Please feel free to reach out if you have any concerns. JazakAllah!`
+    : '';
+  const guardianWhatsAppLink = tenant.guardian_phone
+    ? getWhatsAppLink(tenant.guardian_phone, guardianWhatsAppMsg)
+    : '';
+
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
@@ -95,11 +103,20 @@ export default function TenantDetail() {
           <ArrowLeft className="w-4 h-4" /> Back to Hostelites
         </Button>
 
-        <a href={whatsAppLink} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
-          <Button variant="success" className="gap-2 w-full sm:w-auto justify-center">
-            <MessageSquare className="w-4 h-4" /> WhatsApp Reminder
-          </Button>
-        </a>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          {tenant.guardian_phone && (
+            <a href={guardianWhatsAppLink} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+              <Button variant="outline" className="gap-2 w-full sm:w-auto justify-center border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/30">
+                <Users className="w-4 h-4" /> WhatsApp Guardian
+              </Button>
+            </a>
+          )}
+          <a href={whatsAppLink} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+            <Button variant="success" className="gap-2 w-full sm:w-auto justify-center">
+              <MessageSquare className="w-4 h-4" /> WhatsApp Reminder
+            </Button>
+          </a>
+        </div>
       </div>
 
       {/* Main Profile Header Card */}
@@ -174,7 +191,21 @@ export default function TenantDetail() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Guardian Phone</p>
-                <p className="font-medium mt-0.5">{tenant.guardian_phone || 'Not provided'}</p>
+                {tenant.guardian_phone ? (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <a href={`tel:${tenant.guardian_phone}`} className="font-medium hover:underline text-primary">{tenant.guardian_phone}</a>
+                    <a
+                      href={guardianWhatsAppLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-semibold transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3" /> WhatsApp
+                    </a>
+                  </div>
+                ) : (
+                  <p className="font-medium mt-0.5 text-muted-foreground">Not provided</p>
+                )}
               </div>
               {tenant.leave_date && (
                 <div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDate, formatCurrency, getCurrencySymbol } from '@/lib/utils';
+import { formatDate, formatCurrency, getCurrencySymbol, getWhatsAppLink } from '@/lib/utils';
 import { persistRoom } from '@/lib/rooms';
 import type { Tenant, Room } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Eye, Edit, Trash2, UserMinus, Loader2 } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, UserMinus, Loader2, CheckCircle, MessageSquare, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Tenants() {
@@ -34,6 +34,22 @@ export default function Tenants() {
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
   const [leavingTenant, setLeavingTenant] = useState<Tenant | null>(null);
+
+  // Checkout flow states
+  const [checkoutStep, setCheckoutStep] = useState<'date' | 'summary' | 'done'>('date');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutData, setCheckoutData] = useState<{
+    totalRentExpected: number;
+    totalRentPaid: number;
+    outstandingDues: number;
+    depositOnFile: number;
+    depositPaid: number;
+    deductions: number;
+    netRefund: number;
+  } | null>(null);
+  const [checkoutDeductions, setCheckoutDeductions] = useState(0);
+  const [checkoutNotes, setCheckoutNotes] = useState('');
+  const [checkoutComplete, setCheckoutComplete] = useState(false);
 
   // Form inputs
   const [formData, setFormData] = useState({
@@ -244,24 +260,139 @@ export default function Tenants() {
     }
   };
 
-  // Mark as Left Flow
-  const handleConfirmLeave = async () => {
-    if (!leavingTenant) return;
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({
-          status: 'left',
-          leave_date: leaveDate,
-        })
-        .eq('id', leavingTenant.id);
+  // ─── Enhanced Checkout Flow ───────────────────────────────────────────────────
+  const handleStartCheckout = (tenant: Tenant) => {
+    setLeavingTenant(tenant);
+    setCheckoutStep('date');
+    setCheckoutData(null);
+    setCheckoutDeductions(0);
+    setCheckoutNotes('');
+    setCheckoutComplete(false);
+    setLeaveDate(new Date().toISOString().split('T')[0]);
+  };
 
-      if (error) throw error;
-      setLeavingTenant(null);
+  // After choosing a leave date, calculate outstanding dues & deposit
+  const handleCalculateCheckout = async () => {
+    if (!leavingTenant || !hostel?.id) return;
+    setCheckoutLoading(true);
+
+    try {
+      // Count months from join to leave
+      const joinDate = new Date(leavingTenant.join_date);
+      const lDate = new Date(leaveDate);
+      let totalMonths = 0;
+      const cursor = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
+      while (cursor <= lDate) {
+        totalMonths++;
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+      const totalRentExpected = totalMonths * leavingTenant.monthly_rent;
+
+      // Fetch all rent payments
+      const { data: rentPayments } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('tenant_id', leavingTenant.id)
+        .eq('type', 'rent');
+      const totalRentPaid = (rentPayments || []).reduce((s, p) => s + Number(p.amount), 0);
+
+      // Fetch all deposit payments
+      const { data: depositPayments } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('tenant_id', leavingTenant.id)
+        .eq('type', 'security_deposit');
+      const depositPaid = (depositPayments || []).reduce((s, p) => s + Number(p.amount), 0);
+
+      const outstandingDues = Math.max(0, totalRentExpected - totalRentPaid);
+      const depositOnFile = leavingTenant.security_deposit;
+      const netRefund = Math.max(0, depositPaid - outstandingDues);
+
+      setCheckoutData({
+        totalRentExpected,
+        totalRentPaid,
+        outstandingDues,
+        depositOnFile,
+        depositPaid,
+        deductions: 0,
+        netRefund,
+      });
+      setCheckoutStep('summary');
+    } catch (err) {
+      console.error('Error calculating checkout:', err);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Final checkout: mark as left + optionally record deposit refund expense
+  const handleFinalizeCheckout = async () => {
+    if (!leavingTenant || !hostel?.id || !checkoutData) return;
+    setCheckoutLoading(true);
+
+    try {
+      // Calculate final refund with deductions
+      const finalRefund = Math.max(0, checkoutData.depositPaid - checkoutData.outstandingDues - checkoutDeductions);
+
+      // 1. Mark tenant as left
+      const { error: leaveErr } = await supabase
+        .from('tenants')
+        .update({ status: 'left', leave_date: leaveDate })
+        .eq('id', leavingTenant.id);
+      if (leaveErr) throw leaveErr;
+
+      // 2. Record deposit refund expense (if any refund to give)
+      if (finalRefund > 0) {
+        const { error: expErr } = await supabase
+          .from('expenses')
+          .insert({
+            hostel_id: hostel.id,
+            expense_date: leaveDate,
+            category: 'deposit_refund',
+            description: `Security deposit refund for ${leavingTenant.full_name} (Room ${leavingTenant.room?.room_no || 'N/A'})`,
+            amount: finalRefund,
+            paid_to: leavingTenant.full_name,
+            method: 'cash',
+            notes: checkoutNotes || `Checkout on ${leaveDate}. Deposit: ${checkoutData.depositPaid}, Dues: ${checkoutData.outstandingDues}, Deductions: ${checkoutDeductions}`,
+            created_by: (await supabase.auth.getUser()).data.user?.id || '',
+          });
+        if (expErr) throw expErr;
+      }
+
+      setCheckoutData({ ...checkoutData, netRefund: finalRefund });
+      setCheckoutComplete(true);
+      setCheckoutStep('done');
       fetchData();
     } catch (err) {
-      console.error('Failed to mark tenant as left:', err);
+      console.error('Failed to complete checkout:', err);
+    } finally {
+      setCheckoutLoading(false);
     }
+  };
+
+  const getCheckoutWhatsAppLink = () => {
+    if (!leavingTenant || !checkoutData) return '#';
+    const finalRefund = Math.max(0, checkoutData.depositPaid - checkoutData.outstandingDues - checkoutDeductions);
+    const msg =
+      `Hello ${leavingTenant.full_name},\n\n` +
+      `This is a formal clearance notice from Arslan (Saibaan Hostel Wardan).\n\n` +
+      `📋 *Checkout Summary*\n` +
+      `• Departure Date: ${leaveDate}\n` +
+      `• Room: ${leavingTenant.room?.room_no || 'N/A'}\n\n` +
+      `💰 *Financial Summary*\n` +
+      `• Security Deposit Paid: ${formatCurrency(checkoutData.depositPaid, currencySymbol)}\n` +
+      `• Outstanding Rent Dues: ${formatCurrency(checkoutData.outstandingDues, currencySymbol)}\n` +
+      (checkoutDeductions > 0 ? `• Other Deductions: ${formatCurrency(checkoutDeductions, currencySymbol)}\n` : '') +
+      `• *Net Refund: ${formatCurrency(finalRefund, currencySymbol)}*\n\n` +
+      `Your account is now fully settled. Thank you for staying with us! 🙏`;
+    return getWhatsAppLink(leavingTenant.phone, msg);
+  };
+
+  const handleCloseCheckout = () => {
+    setLeavingTenant(null);
+    setCheckoutStep('date');
+    setCheckoutData(null);
+    setCheckoutComplete(false);
   };
 
   // Delete Tenant Flow
@@ -422,8 +553,8 @@ export default function Tenants() {
                         <Edit className="w-3.5 h-3.5" /> Edit
                       </Button>
                       {t.status === 'active' && (
-                        <Button variant="ghost" size="sm" onClick={() => setLeavingTenant(t)} className="h-8 gap-1 text-xs text-amber-600">
-                          <UserMinus className="w-3.5 h-3.5" /> Leave
+                        <Button variant="ghost" size="sm" onClick={() => handleStartCheckout(t)} className="h-8 gap-1 text-xs text-amber-600">
+                          <UserMinus className="w-3.5 h-3.5" /> Checkout
                         </Button>
                       )}
                       {isOwner && (
@@ -496,7 +627,7 @@ export default function Tenants() {
                               <Edit className="w-4 h-4 text-blue-600" />
                             </Button>
                             {t.status === 'active' && (
-                              <Button variant="ghost" size="icon" onClick={() => setLeavingTenant(t)} title="Mark as Left">
+                              <Button variant="ghost" size="icon" onClick={() => handleStartCheckout(t)} title="Checkout & Mark as Left">
                                 <UserMinus className="w-4 h-4 text-amber-600" />
                               </Button>
                             )}
@@ -731,34 +862,205 @@ export default function Tenants() {
         </DialogContent>
       </Dialog>
 
-      {/* Mark as Left Dialog */}
-      <Dialog open={!!leavingTenant} onOpenChange={(open) => !open && setLeavingTenant(null)}>
-        <DialogContent>
+      {/* ─── Enhanced Checkout & Deposit Refund Dialog ─── */}
+      <Dialog open={!!leavingTenant} onOpenChange={(open) => !open && handleCloseCheckout()}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Mark Hostelite as Left</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {checkoutStep === 'done' ? (
+                <><CheckCircle className="w-5 h-5 text-emerald-500" /> Checkout Complete</>
+              ) : (
+                <><UserMinus className="w-5 h-5 text-amber-500" /> Hostelite Checkout</>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Record the departure date for <strong>{leavingTenant?.full_name}</strong>. This will free up their bed in Room {(leavingTenant?.room as any)?.room_no || 'N/A'}.
+              {checkoutStep === 'date' && `Select departure date for ${leavingTenant?.full_name}`}
+              {checkoutStep === 'summary' && 'Review financial summary and confirm checkout'}
+              {checkoutStep === 'done' && `${leavingTenant?.full_name} has been checked out successfully`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="leave_date">Departure Date</Label>
-              <Input
-                id="leave_date"
-                type="date"
-                value={leaveDate}
-                onChange={(e) => setLeaveDate(e.target.value)}
-              />
-            </div>
-          </div>
+          {/* Step 1: Select departure date */}
+          {checkoutStep === 'date' && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
+                {leavingTenant?.photo_url ? (
+                  <img src={leavingTenant.photo_url} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                    {leavingTenant?.full_name.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-sm">{leavingTenant?.full_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Room {leavingTenant?.room?.room_no || 'N/A'} · Joined {formatDate(leavingTenant?.join_date)}
+                  </p>
+                </div>
+              </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLeavingTenant(null)}>Cancel</Button>
-            <Button variant="warning" onClick={handleConfirmLeave}>
-              Confirm Departure
-            </Button>
-          </DialogFooter>
+              <div className="space-y-2">
+                <Label htmlFor="leave_date">Departure Date</Label>
+                <Input
+                  id="leave_date"
+                  type="date"
+                  value={leaveDate}
+                  onChange={(e) => setLeaveDate(e.target.value)}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseCheckout}>Cancel</Button>
+                <Button onClick={handleCalculateCheckout} disabled={checkoutLoading}>
+                  {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Next: Review Summary
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Step 2: Financial summary & deposit refund */}
+          {checkoutStep === 'summary' && checkoutData && (
+            <div className="space-y-4 py-2">
+              {/* Financial Breakdown */}
+              <div className="rounded-lg border overflow-hidden">
+                <div className="bg-muted/50 px-4 py-2.5">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Financial Summary</p>
+                </div>
+                <div className="divide-y divide-border">
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">Total Rent Expected</span>
+                    <span className="font-medium">{formatCurrency(checkoutData.totalRentExpected, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">Total Rent Paid</span>
+                    <span className="font-medium text-emerald-600">{formatCurrency(checkoutData.totalRentPaid, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm bg-amber-50 dark:bg-amber-950/20">
+                    <span className="font-medium flex items-center gap-1.5">
+                      {checkoutData.outstandingDues > 0 && <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                      Outstanding Dues
+                    </span>
+                    <span className={`font-bold ${checkoutData.outstandingDues > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {formatCurrency(checkoutData.outstandingDues, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deposit Section */}
+              <div className="rounded-lg border overflow-hidden">
+                <div className="bg-muted/50 px-4 py-2.5">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Security Deposit
+                  </p>
+                </div>
+                <div className="divide-y divide-border">
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">Deposit on File</span>
+                    <span className="font-medium">{formatCurrency(checkoutData.depositOnFile, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">Deposit Actually Paid</span>
+                    <span className="font-medium text-emerald-600">{formatCurrency(checkoutData.depositPaid, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">Less: Outstanding Dues</span>
+                    <span className="font-medium text-red-500">- {formatCurrency(checkoutData.outstandingDues, currencySymbol)}</span>
+                  </div>
+
+                  {/* Deductions input */}
+                  <div className="px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-4">
+                      <Label className="text-sm text-muted-foreground whitespace-nowrap">Other Deductions</Label>
+                      <Input
+                        type="number"
+                        value={checkoutDeductions}
+                        onChange={(e) => setCheckoutDeductions(parseFloat(e.target.value) || 0)}
+                        className="w-32 text-right"
+                        placeholder="0"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">Damages, missing items, cleaning charges, etc.</p>
+                  </div>
+
+                  {/* Net Refund */}
+                  <div className="flex justify-between items-center px-4 py-3 bg-primary/5">
+                    <span className="font-bold text-sm">Net Refund Amount</span>
+                    <span className="font-bold text-lg text-primary">
+                      {formatCurrency(
+                        Math.max(0, checkoutData.depositPaid - checkoutData.outstandingDues - checkoutDeductions),
+                        currencySymbol
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="checkout_notes" className="text-xs">Checkout Notes (optional)</Label>
+                <Textarea
+                  id="checkout_notes"
+                  value={checkoutNotes}
+                  onChange={(e) => setCheckoutNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Any remarks about checkout, room condition, etc."
+                />
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setCheckoutStep('date')}>Back</Button>
+                <Button variant="warning" onClick={handleFinalizeCheckout} disabled={checkoutLoading}>
+                  {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Confirm Checkout
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Step 3: Checkout complete — success & WhatsApp receipt */}
+          {checkoutStep === 'done' && checkoutData && (
+            <div className="space-y-4 py-2">
+              <div className="text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle className="w-8 h-8 text-emerald-500" />
+                </div>
+                <h3 className="font-bold text-lg">{leavingTenant?.full_name}</h3>
+                <p className="text-sm text-muted-foreground">has been checked out successfully</p>
+
+                {checkoutData.netRefund > 0 && (
+                  <div className="mt-3 p-3 bg-primary/5 rounded-lg border inline-block">
+                    <p className="text-xs text-muted-foreground">Deposit Refund to Pay</p>
+                    <p className="text-xl font-bold text-primary">{formatCurrency(checkoutData.netRefund, currencySymbol)}</p>
+                  </div>
+                )}
+
+                {checkoutData.netRefund === 0 && checkoutData.outstandingDues > 0 && (
+                  <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800 inline-block">
+                    <p className="text-xs text-amber-600">Deposit fully adjusted against outstanding dues</p>
+                    <p className="text-sm font-semibold text-amber-600 mt-1">No refund applicable</p>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <a
+                  href={getCheckoutWhatsAppLink()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto"
+                >
+                  <Button variant="success" className="gap-2 w-full">
+                    <MessageSquare className="w-4 h-4" /> Send Clearance Receipt
+                  </Button>
+                </a>
+                <Button variant="outline" onClick={handleCloseCheckout} className="w-full sm:w-auto">
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
