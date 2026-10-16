@@ -1,15 +1,21 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Building2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function AppLayout() {
   const { hostel } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex overflow-x-hidden">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0 transition-all duration-300">
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 transition-all duration-300",
+        collapsed ? "lg:pl-16" : "lg:pl-64"
+      )}>
         {/* Mobile top bar spacer header */}
         <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between h-14 px-4 bg-background/95 backdrop-blur border-b pl-14">
           <div className="flex items-center gap-2">

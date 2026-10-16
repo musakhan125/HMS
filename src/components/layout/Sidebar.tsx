@@ -22,8 +22,16 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed?: boolean;
+  setCollapsed?: (collapsed: boolean | ((prev: boolean) => boolean)) => void;
+}
+
+export default function Sidebar({ collapsed: controlledCollapsed, setCollapsed: controlledSetCollapsed }: SidebarProps = {}) {
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const collapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+  const setCollapsed = controlledSetCollapsed || setInternalCollapsed;
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const { profile, hostel, signOut, isOwner } = useAuth();
   const location = useLocation();
@@ -37,25 +45,40 @@ export default function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className={cn("flex items-center gap-3 px-4 py-5", collapsed && "justify-center px-2")}>
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg gradient-primary text-white font-bold text-sm shrink-0">
-          <Building2 className="w-5 h-5" />
-        </div>
-        {!collapsed && (
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-sm truncate">{hostel?.name || 'Hostel Manager'}</h1>
-            <p className="text-xs text-muted-foreground truncate">Management System</p>
+      <div className={cn(
+        "flex items-center py-5 transition-all relative",
+        collapsed ? "justify-center px-0" : "justify-between px-4 gap-3"
+      )}>
+        <div className={cn("flex items-center min-w-0", collapsed ? "justify-center w-full" : "gap-3 flex-1")}>
+          <div
+            className={cn(
+              "flex items-center justify-center w-9 h-9 rounded-lg gradient-primary text-white font-bold text-sm shrink-0 shadow-sm",
+              collapsed && "cursor-pointer hover:opacity-90 transition-transform hover:scale-105"
+            )}
+            onClick={() => collapsed && setCollapsed(false)}
+            title={collapsed ? "Click to expand sidebar" : hostel?.name || 'Hostel Manager'}
+          >
+            <Building2 className="w-5 h-5" />
           </div>
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold text-sm truncate">{hostel?.name || 'Hostel Manager'}</h1>
+              <p className="text-xs text-muted-foreground truncate">Management System</p>
+            </div>
+          )}
+        </div>
+
+        {!collapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden lg:flex shrink-0 h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => setCollapsed(true)}
+            title="Collapse sidebar"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
         )}
-        {/* Desktop collapse toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden lg:flex shrink-0 h-7 w-7"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
-        </Button>
       </div>
 
       <Separator />
@@ -165,6 +188,17 @@ export default function Sidebar() {
           collapsed ? "lg:w-16" : "lg:w-64"
         )}
       >
+        {collapsed && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="hidden lg:flex absolute -right-3 top-6 z-50 h-6 w-6 rounded-full bg-background border shadow-md text-muted-foreground hover:text-foreground hover:bg-accent p-0 items-center justify-center cursor-pointer"
+            onClick={() => setCollapsed(false)}
+            title="Expand sidebar"
+          >
+            <ChevronLeft className="h-3.5 w-3.5 rotate-180" />
+          </Button>
+        )}
         {sidebarContent}
       </aside>
     </>
