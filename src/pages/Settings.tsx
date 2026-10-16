@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, Building2, Users, Upload, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Users, Upload, ShieldCheck, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 
 export default function Settings() {
   const { hostel, profile, setHostel, isOwner } = useAuth();
@@ -27,10 +27,8 @@ export default function Settings() {
   const [hostelSaving, setHostelSaving] = useState(false);
   const [hostelSuccess, setHostelSuccess] = useState(false);
 
-  // Staff creation form
+  // Staff assignment form
   const [staffEmail, setStaffEmail] = useState('');
-  const [staffPassword, setStaffPassword] = useState('');
-  const [staffName, setStaffName] = useState('');
   const [staffCreating, setStaffCreating] = useState(false);
   const [staffMsg, setStaffMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -116,43 +114,67 @@ export default function Settings() {
     }
   };
 
-  // Add Staff Account
-  const handleCreateStaff = async (e: React.FormEvent) => {
+  // Assign Staff Account (created in Supabase)
+  const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hostel?.id || !isOwner) return;
     setStaffCreating(true);
     setStaffMsg(null);
 
     try {
-      // 1. Sign up staff user via Auth API
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: staffEmail.trim(),
-        password: staffPassword,
-        options: {
-          data: { full_name: staffName.trim(), role: 'staff' },
-        },
-      });
+      const cleanEmail = staffEmail.trim().toLowerCase();
+      // 1. Look up profile by email
+      const { data: profileData, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
 
-      if (authErr) throw authErr;
-      if (!authData.user) throw new Error('Could not create user account');
+      if (profileErr) throw profileErr;
+      if (!profileData) {
+        throw new Error(`User with email "${cleanEmail}" was not found in Supabase. Please first create this user in Supabase Dashboard (Authentication -> Users -> Add user).`);
+      }
 
-      // 2. Link staff to current hostel in hostel_staff table
-      const { error: staffErr } = await supabase.from('hostel_staff').insert({
-        hostel_id: hostel.id,
-        user_id: authData.user.id,
-      });
+      // 2. Ensure their role in profiles is 'staff'
+      await supabase
+        .from('profiles')
+        .update({ role: 'staff' })
+        .eq('id', profileData.id);
+
+      // 3. Link staff to current hostel in hostel_staff table
+      const { error: staffErr } = await supabase
+        .from('hostel_staff')
+        .upsert({
+          hostel_id: hostel.id,
+          user_id: profileData.id,
+        }, { onConflict: 'hostel_id,user_id' });
 
       if (staffErr) throw staffErr;
 
-      setStaffMsg({ type: 'success', text: `Staff account "${staffEmail}" created successfully!` });
+      setStaffMsg({ type: 'success', text: `Staff member "${cleanEmail}" successfully assigned to this hostel!` });
       setStaffEmail('');
-      setStaffPassword('');
-      setStaffName('');
       fetchStaff();
     } catch (err: any) {
-      setStaffMsg({ type: 'error', text: err.message || 'Failed creating staff account' });
+      setStaffMsg({ type: 'error', text: err.message || 'Failed assigning staff member' });
     } finally {
       setStaffCreating(false);
+    }
+  };
+
+  // Remove staff member from hostel
+  const handleRemoveStaff = async (userId: string) => {
+    if (!hostel?.id || !isOwner) return;
+    if (!window.confirm('Are you sure you want to remove this staff member from your hostel?')) return;
+    try {
+      const { error } = await supabase
+        .from('hostel_staff')
+        .delete()
+        .eq('hostel_id', hostel.id)
+        .eq('user_id', userId);
+      if (error) throw error;
+      fetchStaff();
+    } catch (err: any) {
+      alert(err.message || 'Failed removing staff member');
     }
   };
 
@@ -320,13 +342,35 @@ export default function Settings() {
         <TabsContent value="staff" className="pt-4 space-y-6">
           {isOwner ? (
             <>
+              {/* Guidance on user management */}
+              <Card className="border-blue-500/20 bg-blue-500/5">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-blue-500" />
+                    <CardTitle className="text-base text-blue-400">Strict Admin Provisioning Active</CardTitle>
+                  </div>
+                  <CardDescription className="text-slate-300 text-xs">
+                    Public registration is disabled. All new accounts (owners and staff) must be created by you inside Supabase:
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-xs text-slate-300 space-y-1.5 pt-0">
+                  <p>1. Open your <strong>Supabase Dashboard</strong> &rarr; <strong>Authentication</strong> &rarr; <strong>Users</strong>.</p>
+                  <p>2. Click the green <strong>"Add user"</strong> button &rarr; <strong>"Create user"</strong>.</p>
+                  <p>3. Enter the user's email &amp; password, and tick <strong>"Auto Confirm User"</strong>.</p>
+                  <p>4. Type their email below and click <strong>"Assign Staff to Hostel"</strong>.</p>
+                </CardContent>
+              </Card>
+
+              {/* Assign staff form */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Invite / Register Staff Member</CardTitle>
-                  <CardDescription>Staff members can add tenants, payments, and expenses, but cannot delete records or view executive profit reports.</CardDescription>
+                  <CardTitle className="text-base">Assign Staff to This Hostel</CardTitle>
+                  <CardDescription>
+                    Assign a registered Supabase user to manage hostelites, rooms, payments, and expenses for this hostel.
+                  </CardDescription>
                 </CardHeader>
 
-                <form onSubmit={handleCreateStaff}>
+                <form onSubmit={handleAssignStaff}>
                   <CardContent className="space-y-4">
                     {staffMsg && (
                       <div className={`p-3 text-sm font-medium rounded-md ${
@@ -336,49 +380,26 @@ export default function Settings() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="staff_name">Full Name *</Label>
-                        <Input
-                          id="staff_name"
-                          value={staffName}
-                          onChange={(e) => setStaffName(e.target.value)}
-                          placeholder="Staff Member Name"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="staff_email">Email Address *</Label>
-                        <Input
-                          id="staff_email"
-                          type="email"
-                          value={staffEmail}
-                          onChange={(e) => setStaffEmail(e.target.value)}
-                          placeholder="staff@hostel.com"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="staff_pass">Password *</Label>
-                        <Input
-                          id="staff_pass"
-                          type="password"
-                          value={staffPassword}
-                          onChange={(e) => setStaffPassword(e.target.value)}
-                          placeholder="Min 6 characters"
-                          minLength={6}
-                          required
-                        />
-                      </div>
+                    <div className="space-y-2 max-w-md">
+                      <Label htmlFor="staff_email">Staff Email Address *</Label>
+                      <Input
+                        id="staff_email"
+                        type="email"
+                        value={staffEmail}
+                        onChange={(e) => setStaffEmail(e.target.value)}
+                        placeholder="staff@hostel.com"
+                        required
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        User must already be created in your Supabase Auth dashboard.
+                      </p>
                     </div>
                   </CardContent>
 
                   <CardFooter>
                     <Button type="submit" disabled={staffCreating}>
                       {staffCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                      Create Staff Account
+                      Assign Staff to Hostel
                     </Button>
                   </CardFooter>
                 </form>
@@ -392,7 +413,7 @@ export default function Settings() {
                 <CardContent className="p-0">
                   {staffList.length === 0 ? (
                     <div className="p-6 text-center text-sm text-muted-foreground">
-                      No staff accounts created yet. Use the form above to add staff.
+                      No staff accounts assigned yet. Create users in Supabase and assign them above.
                     </div>
                   ) : (
                     <div className="divide-y">
@@ -402,7 +423,17 @@ export default function Settings() {
                             <p className="font-semibold text-sm">{s.full_name || 'Staff User'}</p>
                             <p className="text-xs text-muted-foreground">{s.email}</p>
                           </div>
-                          <Badge variant="secondary" className="capitalize">{s.role}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="capitalize">{s.role}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8 px-2"
+                              onClick={() => handleRemoveStaff(s.id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" /> Remove
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
