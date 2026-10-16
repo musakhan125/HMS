@@ -264,7 +264,10 @@ export default function RentTracker() {
                 {filteredStatuses.map((item) => {
                   const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
                   const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                  const rentDetail = item.paid_amount > 0
+                    ? `Remaining Balance Due: ${formatCurrency(item.balance, currencySymbol)}`
+                    : `Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}`;
+                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}. Please clear your dues at your earliest convenience. Thank you!`;
                   const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                   return (
@@ -340,7 +343,10 @@ export default function RentTracker() {
                     {filteredStatuses.map((item) => {
                       const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
                       const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                      const rentDetail = item.paid_amount > 0
+                        ? `Remaining Balance Due: ${formatCurrency(item.balance, currencySymbol)}`
+                        : `Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}`;
+                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. ${rentDetail}. Please clear your dues at your earliest convenience. Thank you!`;
                       const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                       return (
