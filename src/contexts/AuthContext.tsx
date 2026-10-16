@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: autoHostel } = await supabase
       .from('hostels')
       .insert({
-        name: 'My Hostel',
+        name: 'Saibaan Hostel',
         owner_id: userId,
         address: 'Main Address',
         currency_symbol: 'Rs.',

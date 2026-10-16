@@ -84,7 +84,7 @@ export default function TenantDetail() {
     .filter(p => p.type === 'security_deposit')
     .reduce((acc, p) => acc + Number(p.amount), 0);
 
-  const whatsAppMsg = `Hello ${tenant.full_name}, this is a reminder regarding your rent from ${hostel?.name || 'Hostel Management'}. Monthly Rent: ${formatCurrency(tenant.monthly_rent, currencySymbol)}. Please settle your dues. Thank you!`;
+  const whatsAppMsg = `Hello ${tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent. Monthly Rent: ${formatCurrency(tenant.monthly_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
   const whatsAppLink = getWhatsAppLink(tenant.phone, whatsAppMsg);
 
   return (

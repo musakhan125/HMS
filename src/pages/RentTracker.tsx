@@ -264,7 +264,7 @@ export default function RentTracker() {
                 {filteredStatuses.map((item) => {
                   const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
                   const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from ${hostel?.name || 'Hostel'} regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}, Paid: ${formatCurrency(item.paid_amount, currencySymbol)}, Balance Due: ${formatCurrency(item.balance, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
                   const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                   return (
@@ -340,7 +340,7 @@ export default function RentTracker() {
                     {filteredStatuses.map((item) => {
                       const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
                       const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from ${hostel?.name || 'Hostel'} regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}, Paid: ${formatCurrency(item.paid_amount, currencySymbol)}, Balance Due: ${formatCurrency(item.balance, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from Arslan (Saibaan Hostel Wardan) regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
                       const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
                       return (
