@@ -295,12 +295,12 @@ export default function Tenants() {
       {/* Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tenants Directory</h1>
-          <p className="text-sm text-muted-foreground">Manage active residents, contact profiles, and room assignments.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Hostelites Directory</h1>
+          <p className="text-sm text-muted-foreground">Manage active hostelites, contact profiles, and room assignments.</p>
         </div>
 
-        <Button onClick={handleOpenAdd} className="gap-2 font-semibold">
-          <Plus className="w-4 h-4" /> Add New Tenant
+        <Button onClick={handleOpenAdd} className="gap-2 font-semibold w-full sm:w-auto">
+          <Plus className="w-4 h-4" /> Add New Hostelite
         </Button>
       </div>
 
@@ -311,7 +311,7 @@ export default function Tenants() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, phone or ID card..."
+              placeholder="Search hostelite by name, phone or ID card..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -349,7 +349,7 @@ export default function Tenants() {
         </CardContent>
       </Card>
 
-      {/* Tenants Table */}
+      {/* Hostelites List / Table */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -359,94 +359,170 @@ export default function Tenants() {
           ) : filteredTenants.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <UserMinus className="w-12 h-12 mx-auto stroke-1 opacity-40 mb-2" />
-              <p>No tenants found matching your filters.</p>
+              <p>No hostelites found matching your filters.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-4">Tenant</th>
-                    <th className="px-6 py-4">Room</th>
-                    <th className="px-6 py-4">Contact</th>
-                    <th className="px-6 py-4">Join Date</th>
-                    <th className="px-6 py-4 text-right">Rent</th>
-                    <th className="px-6 py-4 text-center">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredTenants.map((t) => (
-                    <tr key={t.id} className="hover:bg-muted/40 transition-colors">
-                      <td className="px-6 py-4 font-medium">
-                        <div className="flex items-center gap-3">
-                          {t.photo_url ? (
-                            <img src={t.photo_url} alt={t.full_name} className="w-9 h-9 rounded-full object-cover border" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                              {t.full_name.slice(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-semibold text-foreground">{t.full_name}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{t.tenant_type} {t.institution ? `• ${t.institution}` : ''}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {t.room ? (
-                          <Badge variant="outline" className="font-medium">Room {t.room.room_no}</Badge>
+            <>
+              {/* Mobile Card List (optimized for phones) */}
+              <div className="block sm:hidden divide-y divide-border">
+                {filteredTenants.map((t) => (
+                  <div key={t.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {t.photo_url ? (
+                          <img src={t.photo_url} alt={t.full_name} className="w-11 h-11 rounded-full object-cover border" />
                         ) : (
-                          <span className="text-muted-foreground text-xs">Unassigned</span>
+                          <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                            {t.full_name.slice(0, 2).toUpperCase()}
+                          </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-muted-foreground">{t.phone}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{formatDate(t.join_date)}</td>
-                      <td className="px-6 py-4 text-right font-semibold">
-                        {formatCurrency(t.monthly_rent, currencySymbol)}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <Badge variant={t.status === 'active' ? 'success' : 'secondary'}>
-                          {t.status.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" asChild title="View Profile">
-                            <Link to={`/tenants/${t.id}`}>
-                              <Eye className="w-4 h-4 text-slate-600" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleEditClick(t)} title="Edit Tenant">
-                            <Edit className="w-4 h-4 text-blue-600" />
-                          </Button>
-                          {t.status === 'active' && (
-                            <Button variant="ghost" size="icon" onClick={() => setLeavingTenant(t)} title="Mark as Left">
-                              <UserMinus className="w-4 h-4 text-amber-600" />
-                            </Button>
-                          )}
-                          {isOwner && (
-                            <Button variant="ghost" size="icon" onClick={() => setDeletingTenantId(t.id)} title="Delete Record">
-                              <Trash2 className="w-4 h-4 text-rose-600" />
-                            </Button>
-                          )}
+                        <div>
+                          <p className="font-semibold text-foreground text-sm">{t.full_name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {t.tenant_type} {t.institution ? `• ${t.institution}` : ''}
+                          </p>
                         </div>
-                      </td>
+                      </div>
+                      <Badge variant={t.status === 'active' ? 'success' : 'secondary'} className="text-[10px]">
+                        {t.status.toUpperCase()}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-2.5 rounded-lg">
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] uppercase font-medium">Room</span>
+                        {t.room ? (
+                          <Badge variant="outline" className="mt-0.5 text-xs">Room {t.room.room_no}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">Unassigned</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-muted-foreground block text-[10px] uppercase font-medium">Monthly Rent</span>
+                        <span className="font-bold text-foreground text-sm">
+                          {formatCurrency(t.monthly_rent, currencySymbol)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <a href={`tel:${t.phone}`} className="hover:underline text-primary font-medium">
+                        📞 {t.phone}
+                      </a>
+                      <span>Joined: {formatDate(t.join_date)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                      <Button variant="ghost" size="sm" asChild className="h-8 gap-1 text-xs">
+                        <Link to={`/tenants/${t.id}`}>
+                          <Eye className="w-3.5 h-3.5" /> Profile
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditClick(t)} className="h-8 gap-1 text-xs text-blue-600">
+                        <Edit className="w-3.5 h-3.5" /> Edit
+                      </Button>
+                      {t.status === 'active' && (
+                        <Button variant="ghost" size="sm" onClick={() => setLeavingTenant(t)} className="h-8 gap-1 text-xs text-amber-600">
+                          <UserMinus className="w-3.5 h-3.5" /> Leave
+                        </Button>
+                      )}
+                      {isOwner && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeletingTenantId(t.id)} className="h-8 gap-1 text-xs text-rose-600">
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop / Tablet Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-6 py-4">Hostelite</th>
+                      <th className="px-6 py-4">Room</th>
+                      <th className="px-6 py-4">Contact</th>
+                      <th className="px-6 py-4">Join Date</th>
+                      <th className="px-6 py-4 text-right">Rent</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredTenants.map((t) => (
+                      <tr key={t.id} className="hover:bg-muted/40 transition-colors">
+                        <td className="px-6 py-4 font-medium">
+                          <div className="flex items-center gap-3">
+                            {t.photo_url ? (
+                              <img src={t.photo_url} alt={t.full_name} className="w-9 h-9 rounded-full object-cover border" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                                {t.full_name.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-semibold text-foreground">{t.full_name}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{t.tenant_type} {t.institution ? `• ${t.institution}` : ''}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {t.room ? (
+                            <Badge variant="outline" className="font-medium">Room {t.room.room_no}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground">{t.phone}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{formatDate(t.join_date)}</td>
+                        <td className="px-6 py-4 text-right font-semibold">
+                          {formatCurrency(t.monthly_rent, currencySymbol)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Badge variant={t.status === 'active' ? 'success' : 'secondary'}>
+                            {t.status.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" asChild title="View Profile">
+                              <Link to={`/tenants/${t.id}`}>
+                                <Eye className="w-4 h-4 text-slate-600" />
+                              </Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(t)} title="Edit Hostelite">
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                            {t.status === 'active' && (
+                              <Button variant="ghost" size="icon" onClick={() => setLeavingTenant(t)} title="Mark as Left">
+                                <UserMinus className="w-4 h-4 text-amber-600" />
+                              </Button>
+                            )}
+                            {isOwner && (
+                              <Button variant="ghost" size="icon" onClick={() => setDeletingTenantId(t.id)} title="Delete Record">
+                                <Trash2 className="w-4 h-4 text-rose-600" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
-      {/* Add / Edit Tenant Dialog */}
+      {/* Add / Edit Hostelite Dialog */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingTenant ? 'Edit Tenant Profile' : 'Add New Resident'}</DialogTitle>
-            <DialogDescription>Fill out tenant details, contact, and room assignment.</DialogDescription>
+            <DialogTitle>{editingTenant ? 'Edit Hostelite Profile' : 'Add New Hostelite'}</DialogTitle>
+            <DialogDescription>Fill out hostelite details, contact, and room assignment.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveTenant} className="space-y-4">
@@ -620,7 +696,7 @@ export default function Tenants() {
             {/* Document / Photo Upload */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">
               <div className="space-y-2">
-                <Label>Tenant Photo</Label>
+                <Label>Hostelite Photo</Label>
                 <div className="flex items-center gap-2">
                   <Input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
                 </div>
@@ -648,7 +724,7 @@ export default function Tenants() {
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={formSubmitting}>
                 {formSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {editingTenant ? 'Update Tenant' : 'Register Tenant'}
+                {editingTenant ? 'Update Hostelite' : 'Register Hostelite'}
               </Button>
             </DialogFooter>
           </form>
@@ -659,7 +735,7 @@ export default function Tenants() {
       <Dialog open={!!leavingTenant} onOpenChange={(open) => !open && setLeavingTenant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark Tenant as Left</DialogTitle>
+            <DialogTitle>Mark Hostelite as Left</DialogTitle>
             <DialogDescription>
               Record the departure date for <strong>{leavingTenant?.full_name}</strong>. This will free up their bed in Room {(leavingTenant?.room as any)?.room_no || 'N/A'}.
             </DialogDescription>
@@ -692,7 +768,7 @@ export default function Tenants() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action will permanently delete the tenant record and all payment history associated with them.
+              This action will permanently delete the hostelite record and all payment history associated with them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

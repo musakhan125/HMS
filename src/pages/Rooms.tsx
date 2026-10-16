@@ -182,7 +182,7 @@ export default function Rooms() {
           <p className="text-sm text-muted-foreground">Manage room allocation, bed capacity, and monthly rates.</p>
         </div>
 
-        <Button onClick={handleOpenAdd} className="gap-2 font-semibold">
+        <Button onClick={handleOpenAdd} className="gap-2 font-semibold w-full sm:w-auto">
           <Plus className="w-4 h-4" /> Add New Room
         </Button>
       </div>
@@ -257,7 +257,7 @@ export default function Rooms() {
                     {/* Occupants list summary */}
                     {room.occupants && room.occupants.length > 0 && (
                       <div className="pt-2 border-t space-y-1">
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Current Residents:</p>
+                        <p className="text-xs font-semibold text-muted-foreground mb-1">Current Hostelites:</p>
                         {room.occupants.map((occ) => (
                           <div key={occ.id} className="flex items-center justify-between text-xs">
                             <Link to={`/tenants/${occ.id}`} className="font-medium hover:underline text-foreground">
@@ -308,7 +308,7 @@ export default function Rooms() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="room_no">Room Number / Name *</Label>
                 <Input
@@ -413,7 +413,7 @@ export default function Rooms() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Room?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the room from the hostel layout. Active tenants in this room should be reassigned first.
+              This will remove the room from the hostel layout. Active hostelites in this room should be reassigned first.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

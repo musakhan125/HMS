@@ -221,11 +221,11 @@ export default function Expenses() {
           <p className="text-sm text-muted-foreground">Track hostel operational costs, bills, maintenance, and staff salaries.</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportCSV} className="gap-2 flex-1 sm:flex-initial">
             <Download className="w-4 h-4" /> Export CSV
           </Button>
-          <Button onClick={handleOpenAdd} className="gap-2 font-semibold">
+          <Button onClick={handleOpenAdd} className="gap-2 font-semibold flex-1 sm:flex-initial">
             <Plus className="w-4 h-4" /> Record Expense
           </Button>
         </div>
@@ -277,7 +277,7 @@ export default function Expenses() {
         </CardContent>
       </Card>
 
-      {/* Expenses Table */}
+      {/* Expenses List / Table */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -290,54 +290,96 @@ export default function Expenses() {
               <p>No expense logs matching your query.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4">Description</th>
-                    <th className="px-6 py-4">Paid To</th>
-                    <th className="px-6 py-4 text-right">Amount</th>
-                    <th className="px-6 py-4">Method</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredExpenses.map((exp) => (
-                    <tr key={exp.id} className="hover:bg-muted/40 transition-colors">
-                      <td className="px-6 py-4 text-muted-foreground">{formatDate(exp.expense_date)}</td>
-                      <td className="px-6 py-4">
-                        <Badge variant="outline">{snakeToTitle(exp.category)}</Badge>
-                      </td>
-                      <td className="px-6 py-4 font-medium">{exp.description}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{exp.paid_to || 'N/A'}</td>
-                      <td className="px-6 py-4 text-right font-bold text-rose-600">
+            <>
+              {/* Mobile Cards */}
+              <div className="block md:hidden divide-y divide-border">
+                {filteredExpenses.map((exp) => (
+                  <div key={exp.id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{exp.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Paid to: {exp.paid_to || 'N/A'}</p>
+                      </div>
+                      <span className="font-bold text-rose-600 text-sm">
                         {formatCurrency(exp.amount, currencySymbol)}
-                      </td>
-                      <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{exp.method.replace('_', ' ')}</td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {exp.receipt_url && (
-                            <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="icon" title="View Bill Receipt">
-                                <ExternalLink className="w-4 h-4 text-slate-600" />
-                              </Button>
-                            </a>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(exp)}>
-                            <Edit className="w-4 h-4 text-blue-600" />
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge variant="outline" className="text-[10px]">{snakeToTitle(exp.category)}</Badge>
+                      <span className="text-muted-foreground text-[11px] capitalize">via {exp.method.replace('_', ' ')}</span>
+                      <span className="text-muted-foreground text-[11px] ml-auto">{formatDate(exp.expense_date)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                      {exp.receipt_url && (
+                        <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer">
+                          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs">
+                            <ExternalLink className="w-3.5 h-3.5" /> Receipt
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeletingExpenseId(exp.id)} title="Delete">
-  <Trash2 className="w-4 h-4 text-rose-600" />
-</Button>
-                        </div>
-                      </td>
+                        </a>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(exp)} className="h-8 gap-1 text-xs text-blue-600">
+                        <Edit className="w-3.5 h-3.5" /> Edit
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDeletingExpenseId(exp.id)} className="h-8 gap-1 text-xs text-rose-600">
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-6 py-4">Date</th>
+                      <th className="px-6 py-4">Category</th>
+                      <th className="px-6 py-4">Description</th>
+                      <th className="px-6 py-4">Paid To</th>
+                      <th className="px-6 py-4 text-right">Amount</th>
+                      <th className="px-6 py-4">Method</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredExpenses.map((exp) => (
+                      <tr key={exp.id} className="hover:bg-muted/40 transition-colors">
+                        <td className="px-6 py-4 text-muted-foreground">{formatDate(exp.expense_date)}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline">{snakeToTitle(exp.category)}</Badge>
+                        </td>
+                        <td className="px-6 py-4 font-medium">{exp.description}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{exp.paid_to || 'N/A'}</td>
+                        <td className="px-6 py-4 text-right font-bold text-rose-600">
+                          {formatCurrency(exp.amount, currencySymbol)}
+                        </td>
+                        <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{exp.method.replace('_', ' ')}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {exp.receipt_url && (
+                              <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="ghost" size="icon" title="View Bill Receipt">
+                                  <ExternalLink className="w-4 h-4 text-slate-600" />
+                                </Button>
+                              </a>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(exp)}>
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setDeletingExpenseId(exp.id)} title="Delete">
+                              <Trash2 className="w-4 h-4 text-rose-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -357,7 +399,7 @@ export default function Expenses() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="expense_date">Expense Date *</Label>
                 <Input
@@ -396,7 +438,7 @@ export default function Expenses() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount ({currencySymbol}) *</Label>
                 <Input

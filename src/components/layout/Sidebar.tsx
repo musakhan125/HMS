@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/tenants', icon: Users, label: 'Tenants' },
+  { to: '/tenants', icon: Users, label: 'Hostelites' },
   { to: '/rooms', icon: DoorOpen, label: 'Rooms' },
   { to: '/payments', icon: CreditCard, label: 'Payments' },
   { to: '/rent-tracker', icon: CalendarCheck, label: 'Rent Tracker' },

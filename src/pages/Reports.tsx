@@ -247,43 +247,65 @@ export default function Reports() {
         <TabsContent value="defaulters" className="space-y-6 pt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Comprehensive Tenant Defaulters Audit</CardTitle>
-              <CardDescription>Residents with outstanding accumulated rent balances.</CardDescription>
+              <CardTitle className="text-base">Comprehensive Hostelite Defaulters Audit</CardTitle>
+              <CardDescription>Hostelites with outstanding accumulated rent balances.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               {defaultersList.length === 0 ? (
                 <div className="text-center py-12 text-emerald-600 font-medium">
-                  🎉 No defaulters found! All active residents are fully paid up.
+                  🎉 No defaulters found! All active hostelites are fully paid up.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                      <tr>
-                        <th className="px-6 py-3">Tenant Name</th>
-                        <th className="px-6 py-3">Room</th>
-                        <th className="px-6 py-3">Contact</th>
-                        <th className="px-6 py-3 text-right">Expected Rent</th>
-                        <th className="px-6 py-3 text-right">Paid to Date</th>
-                        <th className="px-6 py-3 text-right">Current Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {defaultersList.map(d => (
-                        <tr key={d.tenant.id} className="hover:bg-muted/40">
-                          <td className="px-6 py-3.5 font-medium">{d.tenant.full_name}</td>
-                          <td className="px-6 py-3.5">
-                            <Badge variant="outline">Room {(d.tenant.room as any)?.room_no || 'N/A'}</Badge>
-                          </td>
-                          <td className="px-6 py-3.5 text-muted-foreground">{d.tenant.phone}</td>
-                          <td className="px-6 py-3.5 text-right font-medium">{formatCurrency(d.expectedTotal, currencySymbol)}</td>
-                          <td className="px-6 py-3.5 text-right font-medium text-emerald-600">{formatCurrency(d.paidTotal, currencySymbol)}</td>
-                          <td className="px-6 py-3.5 text-right font-bold text-rose-600">{formatCurrency(d.balance, currencySymbol)}</td>
+                <>
+                  {/* Mobile View */}
+                  <div className="block sm:hidden divide-y divide-border">
+                    {defaultersList.map(d => (
+                      <div key={d.tenant.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-sm text-foreground">{d.tenant.full_name}</p>
+                          <Badge variant="outline">Room {(d.tenant.room as any)?.room_no || 'N/A'}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>📞 {d.tenant.phone}</span>
+                          <span className="font-bold text-rose-600 text-sm">{formatCurrency(d.balance, currencySymbol)}</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Expected: {formatCurrency(d.expectedTotal, currencySymbol)} · Paid: {formatCurrency(d.paidTotal, currencySymbol)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                        <tr>
+                          <th className="px-6 py-3">Hostelite Name</th>
+                          <th className="px-6 py-3">Room</th>
+                          <th className="px-6 py-3">Contact</th>
+                          <th className="px-6 py-3 text-right">Expected Rent</th>
+                          <th className="px-6 py-3 text-right">Paid to Date</th>
+                          <th className="px-6 py-3 text-right">Current Balance</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {defaultersList.map(d => (
+                          <tr key={d.tenant.id} className="hover:bg-muted/40">
+                            <td className="px-6 py-3.5 font-medium">{d.tenant.full_name}</td>
+                            <td className="px-6 py-3.5">
+                              <Badge variant="outline">Room {(d.tenant.room as any)?.room_no || 'N/A'}</Badge>
+                            </td>
+                            <td className="px-6 py-3.5 text-muted-foreground">{d.tenant.phone}</td>
+                            <td className="px-6 py-3.5 text-right font-medium">{formatCurrency(d.expectedTotal, currencySymbol)}</td>
+                            <td className="px-6 py-3.5 text-right font-medium text-emerald-600">{formatCurrency(d.paidTotal, currencySymbol)}</td>
+                            <td className="px-6 py-3.5 text-right font-bold text-rose-600">{formatCurrency(d.balance, currencySymbol)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

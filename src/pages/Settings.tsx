@@ -423,7 +423,7 @@ export default function Settings() {
         <TabsContent value="import" className="pt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Bulk Import Tenants from CSV File</CardTitle>
+              <CardTitle className="text-base">Bulk Import Hostelites from CSV File</CardTitle>
               <CardDescription>
                 Upload a CSV spreadsheet with headers: <code>full_name, phone, type, cnic, rent, deposit, join_date</code>
               </CardDescription>

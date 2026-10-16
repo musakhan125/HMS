@@ -275,14 +275,14 @@ export default function Payments() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Payment Receipts & Logs</h1>
-          <p className="text-sm text-muted-foreground">Record tenant payments, issue printable receipts, and export statements.</p>
+          <p className="text-sm text-muted-foreground">Record hostelite payments, issue printable receipts, and export statements.</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportCSV} className="gap-2 flex-1 sm:flex-initial">
             <Download className="w-4 h-4" /> Export CSV
           </Button>
-          <Button onClick={handleOpenAdd} className="gap-2 font-semibold">
+          <Button onClick={handleOpenAdd} className="gap-2 font-semibold flex-1 sm:flex-initial">
             <Plus className="w-4 h-4" /> Record Payment
           </Button>
         </div>
@@ -294,7 +294,7 @@ export default function Payments() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by receipt number or tenant name..."
+              placeholder="Search by receipt number or hostelite name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -303,9 +303,9 @@ export default function Payments() {
 
           <div className="w-full md:w-48">
             <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger><SelectValue placeholder="Filter by Tenant" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Filter by Hostelite" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Tenants</SelectItem>
+                <SelectItem value="all">All Hostelites</SelectItem>
                 {tenants.map(t => (
                   <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
                 ))}
@@ -331,7 +331,7 @@ export default function Payments() {
         </CardContent>
       </Card>
 
-      {/* Payments History Table */}
+      {/* Payments History List / Table */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -344,62 +344,111 @@ export default function Payments() {
               <p>No payment records found matching your query.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-4">Receipt No</th>
-                    <th className="px-6 py-4">Tenant Name</th>
-                    <th className="px-6 py-4">Room</th>
-                    <th className="px-6 py-4">Payment Date</th>
-                    <th className="px-6 py-4">Month For</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4 text-right">Amount</th>
-                    <th className="px-6 py-4">Method</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredPayments.map((p) => {
-                    const tenantObj = p.tenant as any;
-                    return (
-                      <tr key={p.id} className="hover:bg-muted/40 transition-colors">
-                        <td className="px-6 py-4 font-mono font-semibold text-xs text-primary">{p.receipt_no}</td>
-                        <td className="px-6 py-4 font-medium">{tenantObj?.full_name || 'N/A'}</td>
-                        <td className="px-6 py-4 text-muted-foreground">
-                          {tenantObj?.room ? `Room ${tenantObj.room.room_no}` : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-muted-foreground">{formatDate(p.payment_date)}</td>
-                        <td className="px-6 py-4 font-medium">{formatDate(p.month_for)}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant="outline" className="capitalize">{p.type.replace('_', ' ')}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right font-bold text-emerald-600">
+            <>
+              {/* Mobile Card List */}
+              <div className="block md:hidden divide-y divide-border">
+                {filteredPayments.map((p) => {
+                  const tenantObj = p.tenant as any;
+                  return (
+                    <div key={p.id} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="font-mono font-semibold text-xs text-primary">{p.receipt_no}</span>
+                          <p className="font-semibold text-sm text-foreground mt-0.5">{tenantObj?.full_name || 'N/A'}</p>
+                        </div>
+                        <span className="font-bold text-emerald-600 text-base">
                           {formatCurrency(p.amount, currencySymbol)}
-                        </td>
-                        <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedReceipt(p)} className="gap-1">
-                            <Printer className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)} className="gap-1">
-                            <Pencil className="w-3.5 h-3.5" /> 
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => { setDeleteError(null); setPaymentToDelete(p); }}
-                            className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        {tenantObj?.room && (
+                          <Badge variant="outline" className="text-[10px]">Room {tenantObj.room.room_no}</Badge>
+                        )}
+                        <Badge variant="secondary" className="capitalize text-[10px]">{p.type.replace('_', ' ')}</Badge>
+                        <span className="text-muted-foreground text-[11px] capitalize">via {p.method.replace('_', ' ')}</span>
+                        <span className="text-muted-foreground text-[11px] ml-auto">{formatDate(p.payment_date)}</span>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedReceipt(p)} className="h-8 gap-1 text-xs">
+                          <Printer className="w-3.5 h-3.5" /> Receipt
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)} className="h-8 gap-1 text-xs text-blue-600">
+                          <Pencil className="w-3.5 h-3.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setDeleteError(null); setPaymentToDelete(p); }}
+                          className="h-8 gap-1 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-6 py-4">Receipt No</th>
+                      <th className="px-6 py-4">Hostelite Name</th>
+                      <th className="px-6 py-4">Room</th>
+                      <th className="px-6 py-4">Payment Date</th>
+                      <th className="px-6 py-4">Month For</th>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4 text-right">Amount</th>
+                      <th className="px-6 py-4">Method</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredPayments.map((p) => {
+                      const tenantObj = p.tenant as any;
+                      return (
+                        <tr key={p.id} className="hover:bg-muted/40 transition-colors">
+                          <td className="px-6 py-4 font-mono font-semibold text-xs text-primary">{p.receipt_no}</td>
+                          <td className="px-6 py-4 font-medium">{tenantObj?.full_name || 'N/A'}</td>
+                          <td className="px-6 py-4 text-muted-foreground">
+                            {tenantObj?.room ? `Room ${tenantObj.room.room_no}` : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-muted-foreground">{formatDate(p.payment_date)}</td>
+                          <td className="px-6 py-4 font-medium">{formatDate(p.month_for)}</td>
+                          <td className="px-6 py-4">
+                            <Badge variant="outline" className="capitalize">{p.type.replace('_', ' ')}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-emerald-600">
+                            {formatCurrency(p.amount, currencySymbol)}
+                          </td>
+                          <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
+                          <td className="px-6 py-4 text-right whitespace-nowrap">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedReceipt(p)} className="gap-1">
+                              <Printer className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)} className="gap-1">
+                              <Pencil className="w-3.5 h-3.5" /> 
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setDeleteError(null); setPaymentToDelete(p); }}
+                              className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -424,9 +473,9 @@ export default function Payments() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="tenant_id">Select Tenant *</Label>
+              <Label htmlFor="tenant_id">Select Hostelite *</Label>
               <Select value={formData.tenant_id} onValueChange={handleTenantChange}>
-                <SelectTrigger><SelectValue placeholder="Choose active resident" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Choose active hostelite" /></SelectTrigger>
                 <SelectContent>
                   {tenants.map(t => (
                     <SelectItem key={t.id} value={t.id}>
@@ -437,7 +486,7 @@ export default function Payments() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="type">Payment Category *</Label>
                 <Select

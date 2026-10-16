@@ -308,7 +308,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">{formatCurrency(rentOutstanding, currencySymbol)}</div>
-            <p className="text-xs text-muted-foreground mt-1">{defaulters.length} tenant(s) pending</p>
+            <p className="text-xs text-muted-foreground mt-1">{defaulters.length} hostelite(s) pending</p>
           </CardContent>
         </Card>
 
@@ -366,7 +366,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">{formatCurrency(depositsHeld, currencySymbol)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Refundable tenant deposits</p>
+            <p className="text-xs text-muted-foreground mt-1">Refundable hostelite deposits</p>
           </CardContent>
         </Card>
 
@@ -449,53 +449,77 @@ export default function Dashboard() {
 
       {/* Top Defaulters Table */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base font-semibold">Pending Rent Defaulters</CardTitle>
-            <CardDescription>Active tenants with pending balance for {selectedMonth}</CardDescription>
+            <CardDescription>Active hostelites with pending balance for {selectedMonth}</CardDescription>
           </div>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
             <Link to="/rent-tracker">View Rent Tracker</Link>
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {defaulters.length === 0 ? (
             <div className="text-center py-8 text-emerald-600 font-medium text-sm">
-              ✨ All active tenants have paid rent for this month!
+              ✨ All active hostelites have paid rent for this month!
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Tenant Name</th>
-                    <th className="px-4 py-3">Room</th>
-                    <th className="px-4 py-3">Contact</th>
-                    <th className="px-4 py-3 text-right">Outstanding Rent</th>
-                    <th className="px-4 py-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {defaulters.map((d) => (
-                    <tr key={d.id} className="hover:bg-muted/50">
-                      <td className="px-4 py-3 font-medium">{d.name}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline">Room {d.room_no}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{d.phone || 'N/A'}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-rose-600">
-                        {formatCurrency(d.balance, currencySymbol)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary">
-                          <Link to={`/tenants/${d.id}`}>View Ledger</Link>
-                        </Button>
-                      </td>
+            <>
+              {/* Mobile Card View */}
+              <div className="block sm:hidden divide-y divide-border">
+                {defaulters.map((d) => (
+                  <div key={d.id} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-sm text-foreground">{d.name}</p>
+                      <Badge variant="outline">Room {d.room_no}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{d.phone || 'No phone'}</span>
+                      <span className="font-bold text-rose-600">{formatCurrency(d.balance, currencySymbol)}</span>
+                    </div>
+                    <div className="pt-1 flex justify-end">
+                      <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary h-8 px-2">
+                        <Link to={`/tenants/${d.id}`}>View Ledger</Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">Hostelite Name</th>
+                      <th className="px-4 py-3">Room</th>
+                      <th className="px-4 py-3">Contact</th>
+                      <th className="px-4 py-3 text-right">Outstanding Rent</th>
+                      <th className="px-4 py-3 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {defaulters.map((d) => (
+                      <tr key={d.id} className="hover:bg-muted/50">
+                        <td className="px-4 py-3 font-medium">{d.name}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline">Room {d.room_no}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{d.phone || 'N/A'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-rose-600">
+                          {formatCurrency(d.balance, currencySymbol)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary">
+                            <Link to={`/tenants/${d.id}`}>View Ledger</Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

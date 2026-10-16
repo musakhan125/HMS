@@ -224,7 +224,7 @@ export default function RentTracker() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by tenant name, room number, or phone..."
+              placeholder="Search by hostelite name, room number, or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -245,7 +245,7 @@ export default function RentTracker() {
         </CardContent>
       </Card>
 
-      {/* Rent Tracker Table */}
+      {/* Rent Tracker Table / Mobile Cards */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -255,82 +255,148 @@ export default function RentTracker() {
           ) : filteredStatuses.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <CalendarCheck className="w-12 h-12 mx-auto stroke-1 opacity-40 mb-2" />
-              <p>No tenant records found for this period.</p>
+              <p>No hostelite records found for this period.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-4">Tenant Name</th>
-                    <th className="px-6 py-4">Room</th>
-                    <th className="px-6 py-4 text-right">Expected Rent</th>
-                    <th className="px-6 py-4 text-right">Paid Amount</th>
-                    <th className="px-6 py-4 text-right">Balance Due</th>
-                    <th className="px-6 py-4 text-center">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredStatuses.map((item) => {
-                    const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
-                    const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
-                    const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from ${hostel?.name || 'Hostel'} regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}, Paid: ${formatCurrency(item.paid_amount, currencySymbol)}, Balance Due: ${formatCurrency(item.balance, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
-                    const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
+            <>
+              {/* Mobile Cards for Phones */}
+              <div className="block md:hidden divide-y divide-border">
+                {filteredStatuses.map((item) => {
+                  const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
+                  const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
+                  const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from ${hostel?.name || 'Hostel'} regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}, Paid: ${formatCurrency(item.paid_amount, currencySymbol)}, Balance Due: ${formatCurrency(item.balance, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                  const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
 
-                    return (
-                      <tr key={item.tenant.id} className="hover:bg-muted/40 transition-colors">
-                        <td className="px-6 py-4 font-medium">
-                          <div>
-                            <p className="font-semibold text-foreground">{item.tenant.full_name}</p>
-                            <p className="text-xs text-muted-foreground">{item.tenant.phone}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant="outline">Room {roomNo}</Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right font-medium">
-                          {formatCurrency(item.expected_rent, currencySymbol)}
-                        </td>
-                        <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                          {formatCurrency(item.paid_amount, currencySymbol)}
-                        </td>
-                        <td className="px-6 py-4 text-right font-bold text-rose-600">
-                          {formatCurrency(item.balance, currencySymbol)}
-                        </td>
-                        <td className="px-6 py-4 text-center">
+                  return (
+                    <div key={item.tenant.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-foreground text-sm">{item.tenant.full_name}</p>
+                          <a href={`tel:${item.tenant.phone}`} className="text-xs text-primary font-medium hover:underline">
+                            📞 {item.tenant.phone}
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="text-xs">Room {roomNo}</Badge>
                           {item.status === 'paid' && <Badge variant="success">PAID</Badge>}
                           {item.status === 'partial' && <Badge variant="warning">PARTIAL</Badge>}
                           {item.status === 'unpaid' && <Badge variant="danger">UNPAID</Badge>}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {item.status !== 'paid' && (
-                              <>
-                                <a href={waLink} target="_blank" rel="noopener noreferrer">
-                                  <Button variant="outline" size="sm" className="gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
-                                    <MessageSquare className="w-3.5 h-3.5" /> Reminder
-                                  </Button>
-                                </a>
+                        </div>
+                      </div>
 
-                                <Button size="sm" onClick={() => handleOpenQuickPay(item)} className="gap-1">
-                                  <CreditCard className="w-3.5 h-3.5" /> Pay
-                                </Button>
-                              </>
-                            )}
-                            {item.status === 'paid' && (
-                              <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                                <CheckCircle className="w-4 h-4" /> Cleared
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      <div className="grid grid-cols-3 gap-2 bg-muted/40 p-2.5 rounded-lg text-center text-xs">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block uppercase font-medium">Expected</span>
+                          <span className="font-medium text-foreground">{formatCurrency(item.expected_rent, currencySymbol)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block uppercase font-medium">Paid</span>
+                          <span className="font-bold text-emerald-600">{formatCurrency(item.paid_amount, currencySymbol)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block uppercase font-medium">Balance</span>
+                          <span className="font-bold text-rose-600">{formatCurrency(item.balance, currencySymbol)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                        {item.status !== 'paid' ? (
+                          <>
+                            <a href={waLink} target="_blank" rel="noopener noreferrer" className="flex-1 sm:flex-initial">
+                              <Button variant="outline" size="sm" className="w-full gap-1 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8">
+                                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Reminder
+                              </Button>
+                            </a>
+                            <Button size="sm" onClick={() => handleOpenQuickPay(item)} className="gap-1 text-xs h-8">
+                              <CreditCard className="w-3.5 h-3.5" /> Quick Pay
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 py-1">
+                            <CheckCircle className="w-4 h-4" /> Cleared for Month
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-6 py-4">Hostelite Name</th>
+                      <th className="px-6 py-4">Room</th>
+                      <th className="px-6 py-4 text-right">Expected Rent</th>
+                      <th className="px-6 py-4 text-right">Paid Amount</th>
+                      <th className="px-6 py-4 text-right">Balance Due</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredStatuses.map((item) => {
+                      const roomNo = (item.tenant.room as any)?.room_no || 'N/A';
+                      const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
+                      const waMsg = `Dear ${item.tenant.full_name}, this is a gentle reminder from ${hostel?.name || 'Hostel'} regarding your rent for ${monthLabel}. Expected Rent: ${formatCurrency(item.expected_rent, currencySymbol)}, Paid: ${formatCurrency(item.paid_amount, currencySymbol)}, Balance Due: ${formatCurrency(item.balance, currencySymbol)}. Please clear your dues at your earliest convenience. Thank you!`;
+                      const waLink = getWhatsAppLink(item.tenant.phone, waMsg);
+
+                      return (
+                        <tr key={item.tenant.id} className="hover:bg-muted/40 transition-colors">
+                          <td className="px-6 py-4 font-medium">
+                            <div>
+                              <p className="font-semibold text-foreground">{item.tenant.full_name}</p>
+                              <p className="text-xs text-muted-foreground">{item.tenant.phone}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant="outline">Room {roomNo}</Badge>
+                          </td>
+                          <td className="px-6 py-4 text-right font-medium">
+                            {formatCurrency(item.expected_rent, currencySymbol)}
+                          </td>
+                          <td className="px-6 py-4 text-right font-medium text-emerald-600">
+                            {formatCurrency(item.paid_amount, currencySymbol)}
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-rose-600">
+                            {formatCurrency(item.balance, currencySymbol)}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {item.status === 'paid' && <Badge variant="success">PAID</Badge>}
+                            {item.status === 'partial' && <Badge variant="warning">PARTIAL</Badge>}
+                            {item.status === 'unpaid' && <Badge variant="danger">UNPAID</Badge>}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {item.status !== 'paid' && (
+                                <>
+                                  <a href={waLink} target="_blank" rel="noopener noreferrer">
+                                    <Button variant="outline" size="sm" className="gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+                                      <MessageSquare className="w-3.5 h-3.5" /> Reminder
+                                    </Button>
+                                  </a>
+
+                                  <Button size="sm" onClick={() => handleOpenQuickPay(item)} className="gap-1">
+                                    <CreditCard className="w-3.5 h-3.5" /> Pay
+                                  </Button>
+                                </>
+                              )}
+                              {item.status === 'paid' && (
+                                <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                  <CheckCircle className="w-4 h-4" /> Cleared
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

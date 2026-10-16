@@ -69,8 +69,8 @@ export default function TenantDetail() {
   if (!tenant) {
     return (
       <div className="text-center py-20 space-y-4">
-        <p className="text-muted-foreground">Tenant record not found.</p>
-        <Button onClick={() => navigate('/tenants')}>Return to Tenants</Button>
+        <p className="text-muted-foreground">Hostelite record not found.</p>
+        <Button onClick={() => navigate('/tenants')}>Return to Hostelites</Button>
       </div>
     );
   }
@@ -90,13 +90,13 @@ export default function TenantDetail() {
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/tenants')} className="gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back to Tenants
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <Button variant="ghost" onClick={() => navigate('/tenants')} className="gap-2 justify-start sm:w-auto">
+          <ArrowLeft className="w-4 h-4" /> Back to Hostelites
         </Button>
 
-        <a href={whatsAppLink} target="_blank" rel="noopener noreferrer">
-          <Button variant="success" className="gap-2">
+        <a href={whatsAppLink} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+          <Button variant="success" className="gap-2 w-full sm:w-auto justify-center">
             <MessageSquare className="w-4 h-4" /> WhatsApp Reminder
           </Button>
         </a>
@@ -233,39 +233,58 @@ export default function TenantDetail() {
               {payments.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <CreditCard className="w-10 h-10 mx-auto opacity-40 mb-2 stroke-1" />
-                  <p className="text-sm">No payments recorded for this tenant yet.</p>
+                  <p className="text-sm">No payments recorded for this hostelite yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs uppercase bg-muted text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3">Receipt No</th>
-                        <th className="px-4 py-3">Payment Date</th>
-                        <th className="px-4 py-3">Month For</th>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3 text-right">Amount</th>
-                        <th className="px-4 py-3">Method</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {payments.map((p) => (
-                        <tr key={p.id} className="hover:bg-muted/40">
-                          <td className="px-4 py-3 font-mono text-xs font-semibold">{p.receipt_no}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{formatDate(p.payment_date)}</td>
-                          <td className="px-4 py-3 font-medium">{formatDate(p.month_for)}</td>
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className="capitalize">{p.type.replace('_', ' ')}</Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-emerald-600">
-                            {formatCurrency(p.amount, currencySymbol)}
-                          </td>
-                          <td className="px-4 py-3 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
+                <>
+                  {/* Mobile payment history cards */}
+                  <div className="block sm:hidden divide-y divide-border">
+                    {payments.map((p) => (
+                      <div key={p.id} className="py-3 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-semibold text-primary">{p.receipt_no}</span>
+                          <span className="font-bold text-emerald-600 text-sm">{formatCurrency(p.amount, currencySymbol)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="capitalize">{p.type.replace('_', ' ')} · {p.method.replace('_', ' ')}</span>
+                          <span>{formatDate(p.payment_date)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3">Receipt No</th>
+                          <th className="px-4 py-3">Payment Date</th>
+                          <th className="px-4 py-3">Month For</th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3 text-right">Amount</th>
+                          <th className="px-4 py-3">Method</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {payments.map((p) => (
+                          <tr key={p.id} className="hover:bg-muted/40">
+                            <td className="px-4 py-3 font-mono text-xs font-semibold">{p.receipt_no}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDate(p.payment_date)}</td>
+                            <td className="px-4 py-3 font-medium">{formatDate(p.month_for)}</td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline" className="capitalize">{p.type.replace('_', ' ')}</Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-emerald-600">
+                              {formatCurrency(p.amount, currencySymbol)}
+                            </td>
+                            <td className="px-4 py-3 text-xs capitalize text-muted-foreground">{p.method.replace('_', ' ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
