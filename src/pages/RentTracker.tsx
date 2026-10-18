@@ -135,6 +135,17 @@ export default function RentTracker() {
         };
       });
 
+      statusList.sort((a, b) => {
+        const roomA = (a.tenant.room as any)?.room_no || '';
+        const roomB = (b.tenant.room as any)?.room_no || '';
+        if (roomA && roomB) {
+          return roomA.localeCompare(roomB, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        if (roomA) return -1;
+        if (roomB) return 1;
+        return a.tenant.full_name.localeCompare(b.tenant.full_name);
+      });
+
       setRentStatuses(statusList);
     } catch (err) {
       console.error('Error loading rent tracker:', err);

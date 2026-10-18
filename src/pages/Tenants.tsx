@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDate, formatCurrency, getCurrencySymbol, getWhatsAppLink } from '@/lib/utils';
+import { formatDate, formatCurrency, getCurrencySymbol, getWhatsAppLink, naturalSortRooms } from '@/lib/utils';
 import { persistRoom } from '@/lib/rooms';
 import type { Tenant, Room } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,8 @@ export default function Tenants() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [leavingTenant, setLeavingTenant] = useState<Tenant | null>(null);
 
   // Checkout flow states
@@ -87,9 +89,8 @@ export default function Tenants() {
       const { data: roomsData } = await supabase
         .from('rooms')
         .select('*')
-        .eq('hostel_id', hostel.id)
-        .order('room_no');
-      setRooms(roomsData || []);
+        .eq('hostel_id', hostel.id);
+      setRooms(naturalSortRooms(roomsData || []));
 
       // 2. Fetch Tenants with Room info
       const { data: tenantsData } = await supabase
@@ -398,13 +399,32 @@ export default function Tenants() {
   // Delete Tenant Flow
   const handleDeleteTenant = async () => {
     if (!deletingTenantId) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
     try {
-      const { error } = await supabase.from('tenants').delete().eq('id', deletingTenantId);
-      if (error) throw error;
+      // 1. Delete associated payments first to prevent foreign key constraint violation
+      const { error: paymentsErr } = await supabase
+        .from('payments')
+        .delete()
+        .eq('tenant_id', deletingTenantId);
+
+      if (paymentsErr) throw paymentsErr;
+
+      // 2. Delete the tenant record
+      const { error: tenantErr } = await supabase
+        .from('tenants')
+        .delete()
+        .eq('id', deletingTenantId);
+
+      if (tenantErr) throw tenantErr;
+
       setDeletingTenantId(null);
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete tenant:', err);
+      setDeleteError(err?.message || 'Failed to delete hostelite record.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1065,7 +1085,15 @@ export default function Tenants() {
       </Dialog>
 
       {/* Delete Confirmation Alert Dialog */}
-      <AlertDialog open={!!deletingTenantId} onOpenChange={(open) => !open && setDeletingTenantId(null)}>
+      <AlertDialog
+        open={!!deletingTenantId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingTenantId(null);
+            setDeleteError(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -1073,9 +1101,22 @@ export default function Tenants() {
               This action will permanently delete the hostelite record and all payment history associated with them.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteError && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-sm rounded-md border border-red-200 dark:border-red-900">
+              {deleteError}
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteTenant} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteTenant();
+              }}
+              disabled={deleteLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Delete Record
             </AlertDialogAction>
           </AlertDialogFooter>

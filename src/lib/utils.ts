@@ -95,3 +95,13 @@ export function getWhatsAppLink(phone: string, message: string): string {
   const encodedMessage = encodeURIComponent(message);
   return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
 }
+
+/** Naturally sort room numbers (e.g. 1, 2, 3 ... 9, 10, 11, 12) */
+export function naturalSortRooms<T extends { room_no?: string }>(rooms: T[]): T[] {
+  return [...rooms].sort((a, b) => {
+    const aNo = a.room_no || '';
+    const bNo = b.room_no || '';
+    return aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
+

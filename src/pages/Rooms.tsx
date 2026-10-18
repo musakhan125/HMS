@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatCurrency, getCurrencySymbol } from '@/lib/utils';
+import { formatCurrency, getCurrencySymbol, naturalSortRooms } from '@/lib/utils';
 import { formatFloorLabel, persistRoom } from '@/lib/rooms';
 import type { Room, Tenant, RoomType } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, DoorOpen, Bed, Users, Edit, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
+import { Plus, DoorOpen, Bed, Users, Edit, Trash2, Loader2, CheckCircle2, DollarSign, TrendingUp, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Rooms() {
@@ -22,6 +22,7 @@ export default function Rooms() {
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [collectedRent, setCollectedRent] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Modal State
@@ -67,8 +68,11 @@ export default function Rooms() {
 
       setTenants((activeTenants as Tenant[]) || []);
 
+      // Naturally sort rooms so 1, 2, 3 ... 9, 10, 11 are in proper order
+      const sortedRooms = naturalSortRooms((roomsData as Room[]) || []);
+
       // Attach active occupants to each room
-      const enrichedRooms = (roomsData || []).map((r: Room) => {
+      const enrichedRooms = sortedRooms.map((r: Room) => {
         const roomOccupants = (activeTenants || []).filter((t: Tenant) => t.room_id === r.id);
         return {
           ...r,
@@ -76,6 +80,22 @@ export default function Rooms() {
           occupied_beds: roomOccupants.length,
         };
       });
+
+      // Fetch rent collected for current month
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('amount, type')
+        .eq('hostel_id', hostel.id)
+        .eq('type', 'rent')
+        .gte('payment_date', monthStart)
+        .lt('payment_date', nextMonth);
+
+      const collected = (paymentsData || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      setCollectedRent(collected);
 
       setRooms(enrichedRooms);
     } catch (err) {
@@ -173,6 +193,23 @@ export default function Rooms() {
     return { label: 'AVAILABLE', variant: 'success' as const };
   };
 
+  // Capacity and Financial Totals
+  const totalBeds = rooms.reduce((acc, r) => acc + (r.beds || 0), 0);
+  const occupiedBeds = rooms.reduce((acc, r) => acc + (r.occupied_beds || 0), 0);
+  const vacantBeds = Math.max(0, totalBeds - occupiedBeds);
+
+  // Full Room Capacity: Maximum expected revenue if ALL beds across all added rooms are filled (even if empty)
+  const totalCapacityRevenue = rooms.reduce(
+    (acc, r) => acc + ((r.beds || 0) * (Number(r.rent_per_bed) || 0)),
+    0
+  );
+
+  // Active expected rent from current active tenants
+  const activeExpectedRent = tenants.reduce((acc, t) => acc + (Number(t.monthly_rent) || 0), 0);
+
+  const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
+  const collectionRate = activeExpectedRent > 0 ? Math.round((collectedRent / activeExpectedRent) * 100) : 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -185,6 +222,89 @@ export default function Rooms() {
         <Button onClick={handleOpenAdd} className="gap-2 font-semibold w-full sm:w-auto">
           <Plus className="w-4 h-4" /> Add New Room
         </Button>
+      </div>
+
+      {/* Financial & Capacity Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Full Capacity Revenue (All Rooms Added) */}
+        <Card className="border-blue-500/20 bg-gradient-to-br from-blue-50/50 via-background to-background dark:from-blue-950/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+              Total Room Capacity
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Building2 className="w-4 h-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tight text-blue-700 dark:text-blue-300">
+              {formatCurrency(totalCapacityRevenue, currencySymbol)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Max potential · {totalBeds} beds in {rooms.length} rooms
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Active Expected Rent */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Active Expected Rent
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <DollarSign className="w-4 h-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tight">
+              {formatCurrency(activeExpectedRent, currencySymbol)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              From {occupiedBeds} occupied bed(s) · {vacantBeds} vacant
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Rent Collected This Month */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+              Rent Collected (This Month)
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(collectedRent, currencySymbol)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {collectionRate}% of active expected collected
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Bed Occupancy Rate */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Bed Occupancy
+            </CardTitle>
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <Bed className="w-4 h-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
+              {occupancyRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {occupiedBeds} of {totalBeds} beds occupied ({vacantBeds} available)
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Rooms Grid */}

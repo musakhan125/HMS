@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatDate, formatCurrency, getCurrencySymbol, exportToCSV, snakeToTitle } from '@/lib/utils';
+import { formatDate, formatCurrency, getCurrencySymbol, exportToCSV, snakeToTitle, naturalSortRooms } from '@/lib/utils';
 import { formatFloorLabel } from '@/lib/rooms';
 import type { Tenant, Room, Payment, Expense } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export default function Reports() {
         .from('rooms')
         .select('*')
         .eq('hostel_id', hostel.id);
-      setRooms((rData as Room[]) || []);
+      setRooms(naturalSortRooms((rData as Room[]) || []));
 
       // 3. Payments
       const { data: pData } = await supabase
