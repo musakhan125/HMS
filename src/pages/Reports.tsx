@@ -30,32 +30,21 @@ export default function Reports() {
     setLoading(true);
 
     try {
-      // 1. Tenants
-      const { data: tData } = await supabase
-        .from('tenants')
-        .select('*, room:rooms(*)')
-        .eq('hostel_id', hostel.id);
+      const [
+        { data: tData },
+        { data: rData },
+        { data: pData },
+        { data: eData }
+      ] = await Promise.all([
+        supabase.from('tenants').select('*, room:rooms(*)').eq('hostel_id', hostel.id),
+        supabase.from('rooms').select('*').eq('hostel_id', hostel.id),
+        supabase.from('payments').select('*, tenant:tenants(*)').eq('hostel_id', hostel.id),
+        supabase.from('expenses').select('*').eq('hostel_id', hostel.id)
+      ]);
+
       setTenants((tData as Tenant[]) || []);
-
-      // 2. Rooms
-      const { data: rData } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('hostel_id', hostel.id);
       setRooms(naturalSortRooms((rData as Room[]) || []));
-
-      // 3. Payments
-      const { data: pData } = await supabase
-        .from('payments')
-        .select('*, tenant:tenants(*)')
-        .eq('hostel_id', hostel.id);
       setPayments((pData as Payment[]) || []);
-
-      // 4. Expenses
-      const { data: eData } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('hostel_id', hostel.id);
       setExpenses((eData as Expense[]) || []);
     } catch (err) {
       console.error('Error fetching report data:', err);

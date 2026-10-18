@@ -55,19 +55,15 @@ export default function Payments() {
     setLoading(true);
 
     try {
-      const { data: tenantsData } = await supabase
-        .from('tenants')
-        .select('*, room:rooms(*)')
-        .eq('hostel_id', hostel.id)
-        .order('full_name');
+      const [
+        { data: tenantsData },
+        { data: paymentsData }
+      ] = await Promise.all([
+        supabase.from('tenants').select('*, room:rooms(*)').eq('hostel_id', hostel.id).order('full_name'),
+        supabase.from('payments').select('*, tenant:tenants(*, room:rooms(*))').eq('hostel_id', hostel.id).order('created_at', { ascending: false })
+      ]);
+
       setTenants((tenantsData as Tenant[]) || []);
-
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('*, tenant:tenants(*, room:rooms(*))')
-        .eq('hostel_id', hostel.id)
-        .order('created_at', { ascending: false });
-
       setPayments((paymentsData as Payment[]) || []);
     } catch (err) {
       console.error('Error fetching payments:', err);

@@ -48,23 +48,24 @@ export default function Rooms() {
     setLoading(true);
 
     try {
-      // Fetch rooms
-      const { data: roomsData, error: roomsErr } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('hostel_id', hostel.id)
-        .order('room_no');
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+
+      // Fetch rooms, active tenants, and month payments in parallel
+      const [
+        { data: roomsData, error: roomsErr },
+        { data: activeTenants, error: tenantsErr },
+        { data: paymentsData, error: paymentsErr }
+      ] = await Promise.all([
+        supabase.from('rooms').select('*').eq('hostel_id', hostel.id),
+        supabase.from('tenants').select('*').eq('hostel_id', hostel.id).eq('status', 'active'),
+        supabase.from('payments').select('amount, type').eq('hostel_id', hostel.id).eq('type', 'rent').gte('payment_date', monthStart).lt('payment_date', nextMonth)
+      ]);
 
       if (roomsErr) throw roomsErr;
-
-      // Fetch active tenants to compute occupancy per room
-      const { data: activeTenants, error: tenantsErr } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('hostel_id', hostel.id)
-        .eq('status', 'active');
-
       if (tenantsErr) throw tenantsErr;
+      if (paymentsErr) throw paymentsErr;
 
       setTenants((activeTenants as Tenant[]) || []);
 
@@ -81,22 +82,8 @@ export default function Rooms() {
         };
       });
 
-      // Fetch rent collected for current month
-      const now = new Date();
-      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
-
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('amount, type')
-        .eq('hostel_id', hostel.id)
-        .eq('type', 'rent')
-        .gte('payment_date', monthStart)
-        .lt('payment_date', nextMonth);
-
       const collected = (paymentsData || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
       setCollectedRent(collected);
-
       setRooms(enrichedRooms);
     } catch (err) {
       console.error('Error fetching rooms:', err);

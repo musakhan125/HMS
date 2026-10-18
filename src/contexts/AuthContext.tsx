@@ -100,52 +100,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Refresh profile data
   const refreshProfile = useCallback(async () => {
     if (user) {
-      const p = await fetchProfile(user.id, user.email || '');
-      if (p) {
-        setProfile(p);
-        const h = await fetchHostel(user.id);
-        if (h) setHostelState(h);
-      }
+      const [p, h] = await Promise.all([
+        fetchProfile(user.id, user.email || ''),
+        fetchHostel(user.id)
+      ]);
+      if (p) setProfile(p);
+      if (h) setHostelState(h);
     }
   }, [user, fetchProfile, fetchHostel]);
 
   // Initialize auth state
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const p = await fetchProfile(session.user.id, session.user.email || '');
-        if (p) {
-          setProfile(p);
-          const h = await fetchHostel(session.user.id);
-          if (h) setHostelState(h);
-        }
-      }
-      setLoading(false);
-    });
+    let isMounted = true;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+      async (_event, newSession) => {
+        if (!isMounted) return;
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
 
-        if (session?.user) {
-          const p = await fetchProfile(session.user.id, session.user.email || '');
-          if (p) {
-            setProfile(p);
-            const h = await fetchHostel(session.user.id);
-            if (h) setHostelState(h);
+        if (newSession?.user) {
+          try {
+            const [p, h] = await Promise.all([
+              fetchProfile(newSession.user.id, newSession.user.email || ''),
+              fetchHostel(newSession.user.id)
+            ]);
+            if (isMounted) {
+              if (p) setProfile(p);
+              if (h) setHostelState(h);
+            }
+          } catch (e) {
+            console.error('Error loading user profile/hostel:', e);
           }
         } else {
           setProfile(null);
           setHostelState(null);
         }
+        if (isMounted) setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [fetchProfile, fetchHostel]);
 
   const signIn = async (email: string, password: string) => {
@@ -174,19 +172,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setHostelState(h);
   };
 
-  const value: AuthContextType = {
-    session,
-    user,
-    profile,
-    hostel,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    refreshProfile,
-    setHostel,
-    isOwner: profile?.role === 'owner',
-  };
+  const isOwner = profile?.role === 'owner';
+
+  const value = React.useMemo<AuthContextType>(
+    () => ({
+      session,
+      user,
+      profile,
+      hostel,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+      refreshProfile,
+      setHostel,
+      isOwner,
+    }),
+    [session, user, profile, hostel, loading, isOwner, refreshProfile]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

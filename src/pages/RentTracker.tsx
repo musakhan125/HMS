@@ -63,11 +63,14 @@ export default function RentTracker() {
       const nextMonthFirst = new Date(year, month, 1);
       const monthEnd = nextMonthFirst.toISOString().split('T')[0];
 
-      // 1. Fetch tenants for this hostel
-      const { data: tenantsData } = await supabase
-        .from('tenants')
-        .select('*, room:rooms(*)')
-        .eq('hostel_id', hostel.id);
+      // Fetch tenants and rent payments in parallel
+      const [
+        { data: tenantsData },
+        { data: allRentPayments }
+      ] = await Promise.all([
+        supabase.from('tenants').select('*, room:rooms(*)').eq('hostel_id', hostel.id),
+        supabase.from('payments').select('*').eq('hostel_id', hostel.id).eq('type', 'rent').lt('month_for', monthEnd)
+      ]);
 
       if (!tenantsData) {
         setRentStatuses([]);
@@ -88,14 +91,6 @@ export default function RentTracker() {
 
         return true;
       });
-
-      // 2. Fetch all rent payments up to monthEnd
-      const { data: allRentPayments } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('hostel_id', hostel.id)
-        .eq('type', 'rent')
-        .lt('month_for', monthEnd);
 
       const statusList: TenantRentStatus[] = validTenants.map(t => {
         const currentMonthPayments = (allRentPayments || []).filter(

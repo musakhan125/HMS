@@ -70,31 +70,38 @@ export default function Dashboard() {
 
     try {
       const monthStart = `${selectedMonth}-01`;
-      // Calculate month end date
       const year = parseInt(selectedMonth.split('-')[0]);
       const month = parseInt(selectedMonth.split('-')[1]);
       const nextMonthFirst = new Date(year, month, 1);
       const monthEnd = nextMonthFirst.toISOString().split('T')[0];
+      const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1).toISOString().split('T')[0];
 
-      // 1. Fetch Rooms & Beds
-      const { data: roomsData } = await supabase
-        .from('rooms')
-        .select('id, beds, rent_per_bed')
-        .eq('hostel_id', hostel.id);
+      // Fetch all required dashboard data in 4 parallel requests in ONE round trip
+      const [
+        { data: roomsData, error: roomsErr },
+        { data: tenantsData, error: tenantsErr },
+        { data: allPayments, error: paymentsErr },
+        { data: allExpenses, error: expensesErr }
+      ] = await Promise.all([
+        supabase.from('rooms').select('id, beds, rent_per_bed').eq('hostel_id', hostel.id),
+        supabase.from('tenants').select('id, monthly_rent, security_deposit, room_id, status, full_name, phone, rooms(room_no)').eq('hostel_id', hostel.id).eq('status', 'active'),
+        supabase.from('payments').select('amount, type, payment_date, month_for, tenant_id').eq('hostel_id', hostel.id).gte('payment_date', twelveMonthsAgo),
+        supabase.from('expenses').select('amount, category, expense_date').eq('hostel_id', hostel.id).gte('expense_date', twelveMonthsAgo),
+      ]);
 
+      if (roomsErr) throw roomsErr;
+      if (tenantsErr) throw tenantsErr;
+      if (paymentsErr) throw paymentsErr;
+      if (expensesErr) throw expensesErr;
+
+      // 1. Rooms & Beds calculations
       const totalB = roomsData?.reduce((acc, r) => acc + (r.beds || 0), 0) || 0;
       setTotalBeds(totalB);
 
       const fullCapacityRev = roomsData?.reduce((acc, r) => acc + ((r.beds || 0) * (Number(r.rent_per_bed) || 0)), 0) || 0;
       setTotalCapacityRevenue(fullCapacityRev);
 
-      // 2. Fetch Active Tenants
-      const { data: tenantsData } = await supabase
-        .from('tenants')
-        .select('id, monthly_rent, security_deposit, room_id, status, full_name, phone, rooms(room_no)')
-        .eq('hostel_id', hostel.id)
-        .eq('status', 'active');
-
+      // 2. Tenants & Expected Rent
       const occupiedB = tenantsData?.length || 0;
       setOccupiedBeds(occupiedB);
 
@@ -104,47 +111,39 @@ export default function Dashboard() {
       const depHeld = tenantsData?.reduce((acc, t) => acc + (Number(t.security_deposit) || 0), 0) || 0;
       setDepositsHeld(depHeld);
 
-      // 3. Fetch Payments for selected month (Rent + Total Income)
-      const { data: monthPayments } = await supabase
-        .from('payments')
-        .select('amount, type')
-        .eq('hostel_id', hostel.id)
-        .gte('payment_date', monthStart)
-        .lt('payment_date', monthEnd);
+      // 3. Current Selected Month Payments & Rent Collected
+      const monthPayments = (allPayments || []).filter(
+        p => p.payment_date >= monthStart && p.payment_date < monthEnd
+      );
 
       const rentPaid = monthPayments
-        ?.filter(p => p.type === 'rent')
-        .reduce((acc, p) => acc + Number(p.amount), 0) || 0;
+        .filter(p => p.type === 'rent')
+        .reduce((acc, p) => acc + Number(p.amount), 0);
       setRentCollected(rentPaid);
 
-      // Income excludes security deposits (as per requirements)
       const inc = monthPayments
-        ?.filter(p => p.type !== 'security_deposit')
-        .reduce((acc, p) => acc + Number(p.amount), 0) || 0;
+        .filter(p => p.type !== 'security_deposit')
+        .reduce((acc, p) => acc + Number(p.amount), 0);
       setTotalIncome(inc);
 
       const outstanding = Math.max(0, expected - rentPaid);
       setRentOutstanding(outstanding);
 
-      // 4. Fetch Expenses for selected month
-      const { data: monthExpensesData } = await supabase
-        .from('expenses')
-        .select('amount, category')
-        .eq('hostel_id', hostel.id)
-        .gte('expense_date', monthStart)
-        .lt('expense_date', monthEnd);
+      // 4. Current Selected Month Expenses
+      const monthExpensesData = (allExpenses || []).filter(
+        e => e.expense_date >= monthStart && e.expense_date < monthEnd
+      );
 
-      // Operating expenses exclude deposit refunds
       const exp = monthExpensesData
-        ?.filter(e => e.category !== 'deposit_refund')
-        .reduce((acc, e) => acc + Number(e.amount), 0) || 0;
+        .filter(e => e.category !== 'deposit_refund')
+        .reduce((acc, e) => acc + Number(e.amount), 0);
       setTotalExpenses(exp);
 
       setNetProfit(inc - exp);
 
       // 5. Expense Breakdown by Category
       const catMap: Record<string, number> = {};
-      monthExpensesData?.forEach(e => {
+      monthExpensesData.forEach(e => {
         if (e.category !== 'deposit_refund') {
           catMap[e.category] = (catMap[e.category] || 0) + Number(e.amount);
         }
@@ -156,37 +155,32 @@ export default function Dashboard() {
       }));
       setExpenseCategories(catArray);
 
-      // 6. Defaulters calculation for active tenants
-      const defaulterList: { id: string; name: string; room_no: string; phone: string; balance: number }[] = [];
-      
-      if (tenantsData && tenantsData.length > 0) {
-        for (const t of tenantsData) {
-          // get payments for this tenant for current month
-          const { data: tenantRentPayments } = await supabase
-            .from('payments')
-            .select('amount')
-            .eq('tenant_id', t.id)
-            .eq('month_for', monthStart)
-            .eq('type', 'rent');
-
-          const paidThisMonth = tenantRentPayments?.reduce((a, p) => a + Number(p.amount), 0) || 0;
-          const due = Number(t.monthly_rent) - paidThisMonth;
-
-          if (due > 0) {
-            defaulterList.push({
-              id: t.id,
-              name: t.full_name,
-              room_no: (t.rooms as any)?.room_no || 'N/A',
-              phone: t.phone,
-              balance: due
-            });
-          }
+      // 6. Fast in-memory Defaulters calculation (0 extra network queries!)
+      const tenantPaidMap: Record<string, number> = {};
+      (allPayments || []).forEach(p => {
+        if (p.type === 'rent' && p.month_for === monthStart) {
+          tenantPaidMap[p.tenant_id] = (tenantPaidMap[p.tenant_id] || 0) + Number(p.amount);
         }
-      }
-      defaulterList.sort((a, b) => b.balance - a.balance);
+      });
+
+      const defaulterList = (tenantsData || [])
+        .map(t => {
+          const paidThisMonth = tenantPaidMap[t.id] || 0;
+          const due = Number(t.monthly_rent) - paidThisMonth;
+          return {
+            id: t.id,
+            name: t.full_name,
+            room_no: (t.rooms as any)?.room_no || 'N/A',
+            phone: t.phone,
+            balance: due
+          };
+        })
+        .filter(d => d.balance > 0)
+        .sort((a, b) => b.balance - a.balance);
+
       setDefaulters(defaulterList);
 
-      // 7. 12-Month Trend Data
+      // 7. Fast in-memory 12-Month Trend Data (0 extra network queries!)
       const trendList = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -194,22 +188,13 @@ export default function Dashboard() {
         const mStart = `${mStr}-01`;
         const mNext = new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().split('T')[0];
 
-        const { data: pData } = await supabase
-          .from('payments')
-          .select('amount, type')
-          .eq('hostel_id', hostel.id)
-          .gte('payment_date', mStart)
-          .lt('payment_date', mNext);
+        const mInc = (allPayments || [])
+          .filter(p => p.type !== 'security_deposit' && p.payment_date >= mStart && p.payment_date < mNext)
+          .reduce((a, p) => a + Number(p.amount), 0);
 
-        const { data: eData } = await supabase
-          .from('expenses')
-          .select('amount, category')
-          .eq('hostel_id', hostel.id)
-          .gte('expense_date', mStart)
-          .lt('expense_date', mNext);
-
-        const mInc = pData?.filter(p => p.type !== 'security_deposit').reduce((a, p) => a + Number(p.amount), 0) || 0;
-        const mExp = eData?.filter(e => e.category !== 'deposit_refund').reduce((a, e) => a + Number(e.amount), 0) || 0;
+        const mExp = (allExpenses || [])
+          .filter(e => e.category !== 'deposit_refund' && e.expense_date >= mStart && e.expense_date < mNext)
+          .reduce((a, e) => a + Number(e.amount), 0);
 
         trendList.push({
           month: d.toLocaleString('default', { month: 'short' }),

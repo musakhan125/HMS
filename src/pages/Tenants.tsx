@@ -85,19 +85,11 @@ export default function Tenants() {
     setLoading(true);
 
     try {
-      // 1. Fetch Rooms
-      const { data: roomsData } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('hostel_id', hostel.id);
+      const [{ data: roomsData }, { data: tenantsData }] = await Promise.all([
+        supabase.from('rooms').select('*').eq('hostel_id', hostel.id),
+        supabase.from('tenants').select('*, room:rooms(*)').eq('hostel_id', hostel.id).order('created_at', { ascending: false })
+      ]);
       setRooms(naturalSortRooms(roomsData || []));
-
-      // 2. Fetch Tenants with Room info
-      const { data: tenantsData } = await supabase
-        .from('tenants')
-        .select('*, room:rooms(*)')
-        .eq('hostel_id', hostel.id)
-        .order('created_at', { ascending: false });
       setTenants((tenantsData as Tenant[]) || []);
     } catch (err) {
       console.error('Error loading tenants:', err);
