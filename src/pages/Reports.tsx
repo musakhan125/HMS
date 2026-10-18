@@ -313,6 +313,42 @@ export default function Reports() {
 
         {/* Tab 3: Occupancy Report */}
         <TabsContent value="occupancy" className="space-y-6 pt-4">
+          {/* Summary KPIs for Occupancy & Capacity */}
+          {(() => {
+            const totBeds = rooms.reduce((acc, r) => acc + (r.beds || 0), 0);
+            const totOcc = activeTenants.length;
+            const totVac = Math.max(0, totBeds - totOcc);
+            const totCapacityRevenue = rooms.reduce((acc, r) => acc + ((r.beds || 0) * (Number(r.rent_per_bed) || 0)), 0);
+            const activeExpected = activeTenants.reduce((acc, t) => acc + (Number(t.monthly_rent) || 0), 0);
+            const occPct = totBeds > 0 ? Math.round((totOcc / totBeds) * 100) : 0;
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="border-blue-500/20 bg-gradient-to-br from-blue-50/50 via-background to-background dark:from-blue-950/20">
+                  <CardContent className="pt-6">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400">Total Room Capacity</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">{formatCurrency(totCapacityRevenue, currencySymbol)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">100% capacity potential ({rooms.length} rooms, {totBeds} beds)</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Active Expected Rent</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrency(activeExpected, currencySymbol)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">From {totOcc} active occupant(s)</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Overall Bed Occupancy</p>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{occPct}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">{totOcc} occupied · {totVac} vacant beds</p>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Hostel Occupancy & Capacity Report</CardTitle>
@@ -329,12 +365,14 @@ export default function Reports() {
                       <th className="px-6 py-3 text-center">Occupied Beds</th>
                       <th className="px-6 py-3 text-center">Vacant Beds</th>
                       <th className="px-6 py-3 text-right">Rent / Bed</th>
+                      <th className="px-6 py-3 text-right">Full Room Potential</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {rooms.map(r => {
                       const occCount = activeTenants.filter(t => t.room_id === r.id).length;
                       const vacantCount = Math.max(0, r.beds - occCount);
+                      const roomPotential = (r.beds || 0) * (Number(r.rent_per_bed) || 0);
 
                       return (
                         <tr key={r.id} className="hover:bg-muted/40">
@@ -345,10 +383,23 @@ export default function Reports() {
                           <td className="px-6 py-3.5 text-center font-medium text-emerald-600">{occCount}</td>
                           <td className="px-6 py-3.5 text-center font-medium text-teal-600">{vacantCount}</td>
                           <td className="px-6 py-3.5 text-right font-semibold">{formatCurrency(r.rent_per_bed, currencySymbol)}</td>
+                          <td className="px-6 py-3.5 text-right font-bold text-primary">{formatCurrency(roomPotential, currencySymbol)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
+                  <tfoot className="bg-muted/60 font-bold border-t-2 border-border text-sm">
+                    <tr>
+                      <td colSpan={3} className="px-6 py-4">Total ({rooms.length} Rooms)</td>
+                      <td className="px-6 py-4 text-center">{rooms.reduce((acc, r) => acc + (r.beds || 0), 0)}</td>
+                      <td className="px-6 py-4 text-center text-emerald-600">{activeTenants.length}</td>
+                      <td className="px-6 py-4 text-center text-teal-600">{Math.max(0, rooms.reduce((acc, r) => acc + (r.beds || 0), 0) - activeTenants.length)}</td>
+                      <td className="px-6 py-4 text-right text-muted-foreground">—</td>
+                      <td className="px-6 py-4 text-right text-primary text-base">
+                        {formatCurrency(rooms.reduce((acc, r) => acc + ((r.beds || 0) * (Number(r.rent_per_bed) || 0)), 0), currencySymbol)}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </CardContent>

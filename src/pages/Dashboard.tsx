@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DollarSign, TrendingUp, TrendingDown, Users, Bed, ShieldAlert,
-  PieChart as PieIcon, ArrowUpRight, ArrowDownRight, Calendar, AlertCircle
+  PieChart as PieIcon, ArrowUpRight, ArrowDownRight, Calendar, AlertCircle, Building2
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // Stats state
+  const [totalCapacityRevenue, setTotalCapacityRevenue] = useState(0);
   const [rentExpected, setRentExpected] = useState(0);
   const [rentCollected, setRentCollected] = useState(0);
   const [rentOutstanding, setRentOutstanding] = useState(0);
@@ -78,11 +79,14 @@ export default function Dashboard() {
       // 1. Fetch Rooms & Beds
       const { data: roomsData } = await supabase
         .from('rooms')
-        .select('id, beds')
+        .select('id, beds, rent_per_bed')
         .eq('hostel_id', hostel.id);
 
       const totalB = roomsData?.reduce((acc, r) => acc + (r.beds || 0), 0) || 0;
       setTotalBeds(totalB);
+
+      const fullCapacityRev = roomsData?.reduce((acc, r) => acc + ((r.beds || 0) * (Number(r.rent_per_bed) || 0)), 0) || 0;
+      setTotalCapacityRevenue(fullCapacityRev);
 
       // 2. Fetch Active Tenants
       const { data: tenantsData } = await supabase
@@ -267,17 +271,31 @@ export default function Dashboard() {
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Rent Expected */}
+        {/* Total Room Capacity Revenue (All Rooms Added, Even if Empty) */}
+        <Card className="border-blue-500/20 bg-gradient-to-br from-blue-50/50 via-background to-background dark:from-blue-950/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total Room Capacity</CardTitle>
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Building2 className="w-4 h-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(totalCapacityRevenue, currencySymbol)}</div>
+            <p className="text-xs text-muted-foreground mt-1">100% capacity potential ({totalBeds} total beds)</p>
+          </CardContent>
+        </Card>
+
+        {/* Active Rent Expected */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rent Expected</CardTitle>
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
+            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Rent Expected</CardTitle>
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
               <DollarSign className="w-4 h-4" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(rentExpected, currencySymbol)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total active rent capacity</p>
+            <p className="text-xs text-muted-foreground mt-1">From {occupiedBeds} active hostelite(s)</p>
           </CardContent>
         </Card>
 
